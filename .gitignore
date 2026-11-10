@@ -7,6 +7,9 @@
 
 # 本机工具与运行时目录
 tools/
+# 例外：AirScript 源码纳入版本管理（不含令牌，便于留档与回滚）
+!tools/airscript/
+!tools/airscript/**
 inbox/
 .workbuddy/
 
