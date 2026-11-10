@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b3d53">
+<meta name="theme-color" content="#050a10">
 <title>人效算例 · 综合考核工作台</title>
 <link rel="stylesheet" href="assets/app.css">
 </head>
@@ -12,38 +12,64 @@
 <header class="appbar">
   <div class="appbar__eyebrow">EFFICIENCY CALCULATOR</div>
   <div class="appbar__row">
-    <div>
+    <div style="min-width:0">
       <h1 class="appbar__title">人效算例</h1>
-      <div class="appbar__sub">四步自己算，算完就知道差在哪</div>
+      <div class="appbar__sub">选站即出数，不用手填</div>
     </div>
+    <button class="theme-btn" id="themeBtn" aria-label="切换主题"></button>
   </div>
 </header>
 
 <main class="screen">
 
   <section class="card" style="margin-top:16px">
-    <div class="field"><label>日均汽油（吨）</label><input type="text" id="gas" inputmode="decimal" placeholder="如 23.98"></div>
-    <div class="field"><label>日均柴油（吨）</label><input type="text" id="diesel" inputmode="decimal" placeholder="如 40.42"></div>
-    <div class="field"><label>实际在岗人数（按考勤折算）</label><input type="text" id="onduty" inputmode="decimal" placeholder="如 30"></div>
-    <div class="field"><label>三年平均在册人数</label><input type="text" id="reg" inputmode="decimal" placeholder="用于缺员修正，如 30"></div>
-    <button class="btn btn--primary btn--block" id="go" style="margin-top:18px">开始计算</button>
+    <div class="field">
+      <label>选择油站</label>
+      <select id="fStation"><option value="">手动输入（不选站）</option></select>
+    </div>
+    <p class="hint" id="srcNote" style="margin-top:10px">
+      数据来源：2023—2025 三年平均日均销量、2026 年 9 月实际在岗人数（含缺员修正）。
+    </p>
   </section>
 
   <div id="out"></div>
+
+  <section class="card" id="paramCard" style="display:none">
+    <div class="sect__head" style="margin-bottom:10px">
+      <span class="sect__title">参数</span>
+      <span class="sect__hint">可改</span>
+    </div>
+    <div class="field"><label>日均汽油（吨）</label><input type="text" id="gas" inputmode="decimal"></div>
+    <div class="field"><label>日均柴油（吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
+    <div class="field"><label>实际在岗人数（考勤折算）</label><input type="text" id="onduty" inputmode="decimal"></div>
+    <div class="field"><label>三年平均在册人数</label><input type="text" id="reg" inputmode="decimal"></div>
+    <div class="field"><label>当月全公司最高人效</label><input type="text" id="maxeff" inputmode="decimal" value="96.1"></div>
+  </section>
+
+  <div id="manual">
+    <section class="card" style="margin-top:16px">
+      <div class="hint">选择油站后自动带出参数并出结果；也可以直接手填下面几项。</div>
+      <div class="field"><label>日均汽油（吨）</label><input type="text" id="g2" inputmode="decimal" placeholder="如 23.98"></div>
+      <div class="field"><label>日均柴油（吨）</label><input type="text" id="d2" inputmode="decimal" placeholder="如 40.42"></div>
+      <div class="field"><label>实际在岗人数</label><input type="text" id="o2" inputmode="decimal" placeholder="如 30"></div>
+      <div class="field"><label>三年平均在册人数</label><input type="text" id="r2" inputmode="decimal" placeholder="如 30"></div>
+      <button class="btn btn--primary btn--block" id="go" style="margin-top:18px">计算</button>
+    </section>
+  </div>
 
   <div class="sect__head" style="margin-top:22px"><span class="sect__title">口径速查</span></div>
   <section class="card">
     <div class="kv"><span>1 吨汽油</span><b>55.65 SGE</b></div>
     <div class="kv"><span>1 吨柴油</span><b>28.80 SGE</b></div>
     <div class="kv"><span>基础人数</span><b>统一扣 4 人</b></div>
-    <div class="kv"><span>缺员修正阈值</span><b>缺员率 &gt; 20%</b></div>
+    <div class="kv"><span>缺员修正阈值</span><b>&gt; 20%</b></div>
     <div class="kv"><span>基准人效</span><b>65.26</b></div>
     <div class="kv"><span>合格线 / 优秀线</span><b>58.73 / 71.79</b></div>
   </section>
 
   <p class="sect__note" style="margin-top:14px">
-    缺员率 ＝（三年平均在册 − 实际在岗）÷ 三年平均在册。超过 20% 时，分母改按
-    max(实际在岗, 三年平均在册 × 80%) − 4 核定，防止压减在岗人数抬高人效。
+    缺员率 ＝（三年平均在册 − 实际在岗）÷ 三年平均在册，超过 20% 时分母改按
+    max(在岗, 在册×80%) − 4 核定。当月实际数据以站端报送为准，此处为基准参考值。
   </p>
 
 </main>
@@ -56,53 +82,115 @@
 <script>
 UI.tabbar('calc');
 
+var ST = null, CUR = null;
+
+fetch('data/stations.json', { cache: 'no-cache' })
+  .then(function (r) { return r.json(); })
+  .then(function (j) {
+    ST = j;
+    var sel = document.getElementById('fStation');
+    j.stations.forEach(function (s) {
+      var op = document.createElement('option');
+      op.value = s.name;
+      op.textContent = s.name + '　' + s.totalTon + ' 吨 · 人效 ' + s.efficiency;
+      sel.appendChild(op);
+    });
+    sel.addEventListener('change', function () { pick(this.value); });
+  })
+  .catch(function () {
+    document.getElementById('srcNote').textContent = '基准数据未加载，请手动填写。';
+  });
+
+function pick(name) {
+  var box = document.getElementById('out');
+  if (!name) { box.innerHTML = ''; document.getElementById('paramCard').style.display = 'none'; return; }
+  var s = null;
+  ST.stations.forEach(function (x) { if (x.name === name) s = x; });
+  if (!s) return;
+  CUR = s;
+
+  document.getElementById('paramCard').style.display = 'block';
+  document.getElementById('manual').style.display = 'none';
+  document.getElementById('gas').value = s.gasTon;
+  document.getElementById('diesel').value = s.dieselTon;
+  document.getElementById('onduty').value = s.onDuty;
+  document.getElementById('reg').value = s.avgRegistered;
+
+  var note = document.getElementById('srcNote');
+  note.textContent = s.avgRegisteredKnown
+    ? '已带出 ' + s.name + ' 的基准值（在册人数为方案公布值）。可直接改。'
+    : '已带出 ' + s.name + ' 的基准值。在册人数方案未逐站公布，暂按与在岗相同处理，缺员率会显示为 0。可直接改。';
+
+  compute();
+}
+
+['gas', 'diesel', 'onduty', 'reg', 'maxeff'].forEach(function (id) {
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === id && CUR) compute();
+  });
+});
+
 document.getElementById('go').addEventListener('click', function () {
+  var g = parseFloat(document.getElementById('g2').value) || 0;
+  var d = parseFloat(document.getElementById('d2').value) || 0;
+  var on = parseFloat(document.getElementById('o2').value) || 0;
+  var reg = parseFloat(document.getElementById('r2').value) || 0;
+  if (on <= 0) { document.getElementById('out').innerHTML = '<div class="err">请填写实际在岗人数。</div>'; return; }
+  if (g + d <= 0) { document.getElementById('out').innerHTML = '<div class="err">请至少填写一种油品的日均销量。</div>'; return; }
+  render({ gasTon: g, dieselTon: d, onDuty: on, avgRegistered: reg || on }, 96.1, null);
+});
+
+function compute() {
   var g = parseFloat(document.getElementById('gas').value) || 0;
   var d = parseFloat(document.getElementById('diesel').value) || 0;
   var on = parseFloat(document.getElementById('onduty').value) || 0;
   var reg = parseFloat(document.getElementById('reg').value) || 0;
-  var out = document.getElementById('out');
+  var mx = parseFloat(document.getElementById('maxeff').value) || 0;
+  if (on <= 0) return;
+  render({ gasTon: g, dieselTon: d, onDuty: on, avgRegistered: reg || on }, mx, CUR);
+}
 
-  if (on <= 0) { out.innerHTML = '<div class="err">请填写实际在岗人数。</div>'; return; }
-  if (g + d <= 0) { out.innerHTML = '<div class="err">请至少填写一种油品的日均销量。</div>'; return; }
-
-  var r = Engine.efficiency({ gasTon: g, dieselTon: d, onDuty: on, avgRegistered: reg || on });
+function render(inp, maxEff, st) {
+  var r = Engine.efficiency(inp);
   var tag = r.grade === '优秀' ? 'ok' : r.grade === '不合格' ? 'no' : '';
+  var h = '';
 
-  var h = '<div class="sect__head" style="margin-top:22px"><span class="sect__title">计算过程</span>' +
+  h += '<div class="card" style="margin-top:16px"><div class="meter">';
+  h += '<div class="meter__main">';
+  h += '<div class="meter__num">' + r.efficiency.toFixed(2) + '<small>SGE / 人 / 日</small></div>';
+  h += '<div class="meter__sub">达成率 ' + (r.rate * 100).toFixed(1) + '% · 基准 65.26</div>';
+  h += '</div><span class="tag ' + tag + '">' + r.grade + '</span></div></div>';
+
+  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">计算过程</span>' +
     '<span class="sect__hint">四步</span></div><section class="card">';
-  h += '<div class="kv"><span>第 1 步　SGE 总量</span><b>' + g.toFixed(2) + '×55.65 ＋ ' + d.toFixed(2) + '×28.80 ＝ ' + r.sge + '</b></div>';
-  h += '<div class="kv"><span>第 2 步　人数分母</span><b>' + r.denomBase + ' − 4 ＝ ' + r.denom + '</b></div>';
-  h += '<div class="kv"><span>第 3 步　人效</span><b>' + r.sge + ' ÷ ' + r.denom + ' ＝ ' + r.efficiency + '</b></div>';
-  h += '<div class="kv"><span>第 4 步　达成率</span><b>' + r.efficiency + ' ÷ 65.26 ＝ ' + (r.rate * 100).toFixed(1) + '%</b></div>';
-  h += '<div class="kv kv--total"><span>评定</span><b><span class="tag ' + tag + '">' + r.grade + '</span></b></div>';
+  h += '<div class="kv"><span>① SGE 总量</span><b>' + inp.gasTon.toFixed(2) + '×55.65 ＋ ' +
+    inp.dieselTon.toFixed(2) + '×28.80 ＝ ' + r.sge + '</b></div>';
+  h += '<div class="kv"><span>② 人数分母</span><b>' + r.denomBase + ' − 4 ＝ ' + r.denom + '</b></div>';
+  h += '<div class="kv"><span>③ 人效</span><b>' + r.sge + ' ÷ ' + r.denom + ' ＝ ' + r.efficiency + '</b></div>';
+  h += '<div class="kv"><span>④ 达成率</span><b>' + r.efficiency + ' ÷ 65.26 ＝ ' +
+    (r.rate * 100).toFixed(1) + '%</b></div>';
   h += '</section>';
 
   if (r.corrected) {
     h += '<div class="warn">缺员率 ' + (r.shortage * 100).toFixed(1) +
-      '%，已超过 20%，触发缺员修正：分母按 max(在岗, 三年平均在册 × 80%) 核定，' +
-      '避免“以缺员换人效”。</div>';
+      '%，超过 20%，触发缺员修正：分母按 max(在岗, 在册×80%) 核定。</div>';
   }
 
-  h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">这个成绩值多少分</span></div>';
-  h += '<section class="card"><div class="field"><label>当月全公司最高人效</label>' +
-    '<input type="text" id="maxeff" inputmode="decimal" value="96.1"></div><div id="segout"></div></section>';
-  out.innerHTML = h;
-
-  var maxInput = document.getElementById('maxeff');
-  function segCalc() {
-    var mx = parseFloat(maxInput.value) || 0;
-    var box = document.getElementById('segout');
-    if (mx <= 0) { box.innerHTML = ''; return; }
-    var seg = Math.round(r.efficiency / mx * CFG.weights.eff * 100 * 100) / 100;
-    box.innerHTML = '<div class="kv kv--total" style="margin-top:10px"><span>人效段得分</span><b>' +
-      r.efficiency + ' ÷ ' + mx + ' × 50 ＝ ' + seg.toFixed(2) + '</b></div>' +
-      '<p class="hint" style="margin-top:10px">若非油达标（指数 1.00，得 20 分）、检查 90 分（得 27 分）、无投诉，' +
-      '综合得分约 <b style="color:#0b3d53">' + (seg + 20 + 27).toFixed(2) + '</b>。</p>';
+  if (maxEff > 0) {
+    var seg = Math.round(r.efficiency / maxEff * CFG.weights.eff * 100 * 100) / 100;
+    h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">折算成多少分</span></div>';
+    h += '<section class="card">';
+    h += '<div class="kv kv--total"><span>人效段</span><b>' + r.efficiency + ' ÷ ' + maxEff + ' × 50 ＝ ' +
+      seg.toFixed(2) + '</b></div>';
+    h += '<div class="kv"><span>若非油达标（20 分）</span><b>' + (seg + 20).toFixed(2) + '</b></div>';
+    h += '<div class="kv"><span>再＋检查 90 分（27 分）</span><b>' + (seg + 20 + 27).toFixed(2) + '</b></div>';
+    h += '</section>';
+    h += '<p class="sect__note" style="margin-top:12px">非油指数每 0.1 加 2 分，检查分 ×30%。' +
+      '两项均无投诉、无进步加分时如上。</p>';
   }
-  maxInput.addEventListener('input', segCalc);
-  segCalc();
-});
+
+  document.getElementById('out').innerHTML = h;
+}
 </script>
 </body>
 </html>

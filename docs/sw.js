@@ -1,5 +1,5 @@
 /* 离线缓存：站点信号差时也能打开打分页 */
-var CACHE = 'kaohe-v2-2';
+var CACHE = 'kaohe-v3-0';
 var SHELL = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ var SHELL = [
   'assets/ui.js',
   'assets/score.js',
   'data/items.json',
+  'data/stations.json',
   'data/rank.json',
   'manifest.webmanifest'
 ];

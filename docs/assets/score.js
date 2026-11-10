@@ -77,7 +77,13 @@
     h += '<div class="meter__main">';
     h += '<div class="meter__num"><span id="meterNum">—</span><small>分</small> <span class="tag" id="meterGrade">待评</span></div>';
     h += '<div class="meter__sub" id="meterSub">已判 0 / ' + DATA.items.length + ' 项</div>';
-    h += '</div></div></section>';
+    h += '</div></div>';
+    h += '<div class="chips">';
+    h += '<div class="chip chip--ok"><div class="chip__n" id="chipOk">0</div><div class="chip__l">符合</div></div>';
+    h += '<div class="chip chip--no"><div class="chip__n" id="chipNo">0</div><div class="chip__l">不符合</div></div>';
+    h += '<div class="chip chip--na"><div class="chip__n" id="chipNa">0</div><div class="chip__l">不适用</div></div>';
+    h += '<div class="chip"><div class="chip__n" id="chipLeft">' + DATA.items.length + '</div><div class="chip__l">未判</div></div>';
+    h += '</div></section>';
 
     h += '<section class="card"><div class="sect__head" style="margin-bottom:10px"><span class="sect__title">本次检查</span></div>';
     h += '<div class="field"><label>油站</label><select id="fStation"><option value="">请选择油站</option>';
@@ -92,8 +98,9 @@
     h += '<section class="cat veto" id="cat-veto">';
     h += '<div class="cat__head" data-cat="veto">';
     h += '<span class="cat__idx">!</span>';
-    h += '<span class="cat__name">一票否决</span>';
-    h += '<span class="cat__meta">6 项 <b id="catmeta-veto">0/6</b></span>' + CHEV + '</div>';
+    h += '<div class="cat__main"><span class="cat__name">一票否决</span>';
+    h += '<div class="cat__bar"><i id="catbar-veto"></i></div></div>';
+    h += '<span class="cat__meta">6 项<b id="catmeta-veto">0/6</b></span>' + CHEV + '</div>';
     h += '<div class="cat__body">';
     h += '<div style="padding:12px 16px 0"><div class="hint">任一项判定不合格，本单位当期综合得分记 0 分、排名垫底、当年不得评优。</div></div>';
     DATA.veto.forEach(function (v) {
@@ -119,8 +126,10 @@
       h += '<section class="cat" id="cat-' + ci + '">';
       h += '<div class="cat__head" data-cat="' + ci + '">';
       h += '<span class="cat__idx">' + (idx < 10 ? '0' + idx : idx) + '</span>';
-      h += '<span class="cat__name">' + esc(cat.title.replace(/^[一二三四五六七八九十]+、/, '')) + '</span>';
-      h += '<span class="cat__meta">' + cat.score + ' 分 <b id="catmeta-' + ci + '">0/' + list.length + '</b></span>';
+      h += '<div class="cat__main"><span class="cat__name">' +
+        esc(cat.title.replace(/^[一二三四五六七八九十]+、/, '')) + '</span>';
+      h += '<div class="cat__bar"><i id="catbar-' + ci + '"></i></div></div>';
+      h += '<span class="cat__meta">' + cat.score + ' 分<b id="catmeta-' + ci + '">0/' + list.length + '</b></span>';
       h += CHEV + '</div><div class="cat__body">';
       list.forEach(function (it) { h += itemHtml(it); });
       h += '</div></section>';
@@ -239,15 +248,24 @@
       var done = list.filter(function (i) { return S_.items[i.no]; }).length;
       var m = $('catmeta-' + ci);
       if (m) m.textContent = done + '/' + list.length;
+      var bar = $('catbar-' + ci);
+      if (bar) bar.style.width = (list.length ? done / list.length * 100 : 0) + '%';
       var box = $('cat-' + ci);
       if (box) box.classList.toggle('done', done === list.length);
     });
     var vm = $('catmeta-veto');
     if (vm) vm.textContent = (DATA.veto.length - v.undecided) + '/' + DATA.veto.length;
+    var vbar = $('catbar-veto');
+    if (vbar) vbar.style.width = ((DATA.veto.length - v.undecided) / DATA.veto.length * 100) + '%';
 
     DATA.items.forEach(function (it) {
       var seg = document.querySelector('.seg[data-kind="item"][data-no="' + it.no + '"]');
       if (seg) { paintSeg(seg, S_.items[it.no] || ''); if (S_.items[it.no]) toggleNote(it.no, S_.items[it.no]); }
+      var box = $('item-' + it.no);
+      if (box) {
+        var a = S_.items[it.no];
+        box.className = 'item' + (a ? ' state-' + a : '');
+      }
     });
     DATA.veto.forEach(function (vv) {
       var seg = document.querySelector('.seg[data-kind="veto"][data-no="' + vv.no + '"]');
@@ -266,6 +284,16 @@
       (r.naCount ? ' · NA ' + r.naCount : '') + (r.noCount ? ' · 不符 ' + r.noCount : '');
     if ($('meterSub')) $('meterSub').textContent = sub;
     if ($('barSub')) $('barSub').textContent = sub;
+
+    var okN = 0, noN = 0, naN = 0;
+    DATA.items.forEach(function (it) {
+      var a = S_.items[it.no];
+      if (a === 'ok') okN++; else if (a === 'no') noN++; else if (a === 'na') naN++;
+    });
+    if ($('chipOk')) $('chipOk').textContent = okN;
+    if ($('chipNo')) $('chipNo').textContent = noN;
+    if ($('chipNa')) $('chipNa').textContent = naN;
+    if ($('chipLeft')) $('chipLeft').textContent = DATA.items.length - okN - noN - naN;
 
     var si = $('subInfo');
     if (si) si.textContent = (S_.station || '未选油站') + ' · ' + (S_.month || '') +
