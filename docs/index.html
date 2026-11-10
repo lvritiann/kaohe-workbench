@@ -3,67 +3,114 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d53">
 <title>加油站综合考核工作台</title>
 <link rel="stylesheet" href="assets/app.css">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#1f4e5f">
 </head>
 <body>
 
-<div class="topbar">
-  <div class="row">
+<header class="appbar">
+  <div class="appbar__eyebrow">SHAANXI EXPRESSWAY YANCHANG PETROLEUM</div>
+  <div class="appbar__row">
     <div>
-      <h1>加油站综合考核工作台</h1>
-      <div class="sub">体系A V2.1 · 油品人效 50% ＋ 非油 20% ＋ 运营检查 30%</div>
+      <h1 class="appbar__title">综合考核工作台</h1>
+      <div class="appbar__sub">体系A · V2.1 三段加权</div>
     </div>
   </div>
-</div>
+</header>
 
-<div class="wrap">
+<main class="screen">
 
-  <div class="entry-grid" style="margin-top:14px">
-    <a class="entry" href="score.html">
-      <div class="t">现场检查打分</div>
-      <div class="d">6 项否决 ＋ 73 项判定，离线可填，提交生成 Excel</div>
-    </a>
-    <a class="entry" href="rank.html">
-      <div class="t">综合排名榜</div>
-      <div class="d">15 站综合得分、三段得分与等级</div>
-    </a>
-    <a class="entry" href="calc.html">
-      <div class="t">人效算例</div>
-      <div class="d">SGE → 在岗人数 → 扣 4 人 → 人效，四步自算</div>
-    </a>
-    <a class="entry" href="inbox.html">
-      <div class="t">待交箱</div>
-      <div class="d">已生成未回传的检查表，防止漏交</div>
-    </a>
-  </div>
-
-  <div class="card">
-    <h2>这套体系怎么算分</h2>
-    <div class="sum-row"><span>油品人效段</span><b>本站人效 ÷ 当月最高人效 × 50</b></div>
-    <div class="sum-row"><span>非油增长段</span><b>20 × 增长指数（封顶 40）</b></div>
-    <div class="sum-row"><span>运营检查段</span><b>检查折算分 × 30%</b></div>
-    <div class="sum-row"><span>投诉扣分</span><b>升级投诉 −10 分/件</b></div>
-    <div class="sum-row"><span>进步加分</span><b>人效同比每升 1% 加 0.2（≤3）</b></div>
-    <div class="hint" style="margin-top:10px">基线 100 分，非油封顶时理论满分 120。等级线：≥90 优秀 / 80 良好 / 70 合格 / &lt;70 不合格。</div>
-  </div>
-
-  <div class="card">
-    <h2>本次检查周期</h2>
-    <div class="hint">
-      每月 25—31 日现场打分 → 次月 3 日站端报数 → 5 日核算 → 7 日投诉统计 → 10 日发布排名 → 15 日后 3 位提交分析报告。
+  <section class="hero">
+    <div class="hero__eyebrow">ASSESSMENT MODEL</div>
+    <div class="hero__title">一个尺子量到底<br>15 座站同榜排序</div>
+    <div class="hero__formula">
+      综合得分 ＝ 人效段 <b>50</b><span class="sep">＋</span>非油段 <b>20</b><span class="sep">＋</span>检查段 <b>30</b><br>
+      扣减投诉<span class="sep">·</span>加计进步分
     </div>
+    <div class="hero__meta">
+      <span>基线 100 分</span>
+      <span>优秀 ≥90</span>
+      <span>合格 ≥70</span>
+    </div>
+  </section>
+
+  <div class="tiles">
+    <a class="tile tile--accent" href="score.html">
+      <div class="tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 12l2.4 2.4L16 9.5"/>
+        </svg>
+      </div>
+      <div class="tile__t">现场打分</div>
+      <div class="tile__d">6 项否决 ＋ 73 项判定，离线可填</div>
+    </a>
+
+    <a class="tile" href="rank.html">
+      <div class="tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 20V11"/><path d="M12 20V4"/><path d="M19 20v-6"/>
+        </svg>
+      </div>
+      <div class="tile__t">排名榜</div>
+      <div class="tile__d">15 站综合得分与三段拆解</div>
+    </a>
+
+    <a class="tile" href="calc.html">
+      <div class="tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4.5" y="3" width="15" height="18" rx="3"/><path d="M8 8h8M8 12h3M8 16h3M14.5 12v4"/>
+        </svg>
+      </div>
+      <div class="tile__t">人效算例</div>
+      <div class="tile__d">四步自算，看清差在哪</div>
+    </a>
+
+    <a class="tile" href="inbox.html">
+      <div class="tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 13h4l2 3h4l2-3h4"/><path d="M4 13 6.5 5h11L20 13v5H4z"/>
+        </svg>
+      </div>
+      <div class="tile__t">待交箱</div>
+      <div class="tile__d">已生成未回传，防漏交</div>
+    </a>
   </div>
 
-  <div style="height:30px"></div>
-</div>
+  <div class="sect__head" style="margin-top:24px">
+    <span class="sect__title">三段分值</span>
+    <span class="sect__hint">权重固定 · 参数一年一核</span>
+  </div>
+  <section class="card">
+    <div class="kv"><span>油品人效</span><b>本站人效 ÷ 当月最高 × 50</b></div>
+    <div class="kv"><span>非油增长</span><b>20 × 增长指数（封顶 40）</b></div>
+    <div class="kv"><span>运营检查</span><b>折算得分 × 30%</b></div>
+    <div class="kv"><span>投诉扣分</span><b>升级投诉 −10 / 件</b></div>
+    <div class="kv"><span>进步加分</span><b>人效每升 1% 加 0.2（≤3）</b></div>
+  </section>
 
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(function(){});
-}
-</script>
+  <div class="sect__head" style="margin-top:22px">
+    <span class="sect__title">月度节奏</span>
+  </div>
+  <section class="card">
+    <div class="kv"><span>25—31 日</span><b>现场检查打分</b></div>
+    <div class="kv"><span>次月 3 日</span><b>站端报数</b></div>
+    <div class="kv"><span>次月 5 日</span><b>核算综合得分</b></div>
+    <div class="kv"><span>次月 7 日</span><b>投诉统计</b></div>
+    <div class="kv"><span>次月 10 日</span><b>发布排名</b></div>
+    <div class="kv"><span>次月 15 日</span><b>后 3 位交分析报告</b></div>
+  </section>
+
+  <p class="sect__note" style="margin-top:16px">
+    现场无信号也可完成打分；提交后生成 Excel，发回计划经营科汇总入金山表格。
+  </p>
+
+</main>
+
+<nav id="tabbar"></nav>
+
+<script src="assets/ui.js"></script>
+<script>UI.tabbar('home');</script>
 </body>
 </html>

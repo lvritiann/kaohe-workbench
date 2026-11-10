@@ -11,6 +11,7 @@ var SHELL = [
   'assets/config.js',
   'assets/engine.js',
   'assets/store.js',
+  'assets/ui.js',
   'assets/score.js',
   'assets/vendor/xlsx.full.min.js',
   'data/items.json',

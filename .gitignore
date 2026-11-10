@@ -13,3 +13,6 @@ inbox/
 # 系统残留
 .DS_Store
 Thumbs.db
+
+# GitHub 访问令牌（严禁入库）
+.gh_token*
