@@ -1,0 +1,6 @@
+{
+  "month": "",
+  "updatedAt": "",
+  "note": "占位文件。每月由计划经营科运行 tools/build_rank.py 生成真实数据后覆盖。",
+  "stations": []
+}

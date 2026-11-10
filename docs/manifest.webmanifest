@@ -1,0 +1,11 @@
+{
+  "name": "加油站综合考核工作台",
+  "short_name": "考核工作台",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#1f4e5f",
+  "lang": "zh-CN",
+  "icons": []
+}

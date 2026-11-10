@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>现场检查打分 · 综合考核工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f4e5f">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="row">
+    <div>
+      <h1>现场检查打分</h1>
+      <div class="sub" id="subInfo">加载中…</div>
+    </div>
+    <a class="back" href="index.html">退出</a>
+  </div>
+</div>
+
+<div class="wrap" id="app"></div>
+
+<div class="bar">
+  <div class="bar-inner">
+    <div class="bar-stat">
+      <div class="bar-num"><span id="barScore">—</span><small> 分</small> <span class="tag" id="barGrade">待评</span></div>
+      <div class="bar-sub" id="barSub">已判 0 / 73 项</div>
+      <div class="progress"><i id="barProg"></i></div>
+    </div>
+    <button class="btn btn-primary" id="btnSubmit">提交</button>
+  </div>
+</div>
+
+<div class="modal-mask" id="mask">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/engine.js"></script>
+<script src="assets/store.js"></script>
+<script src="assets/vendor/xlsx.full.min.js"></script>
+<script src="assets/score.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>待交箱 · 综合考核工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+<meta name="theme-color" content="#1f4e5f">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="row">
+    <div>
+      <h1>待交箱</h1>
+      <div class="sub">已生成但可能还没发回科室的检查表</div>
+    </div>
+    <a class="back" href="index.html">返回</a>
+  </div>
+</div>
+
+<div class="wrap" id="app"><div class="card"><div class="hint">读取中…</div></div></div>
+
+<script src="assets/store.js"></script>
+<script>
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function dt(t){var d=new Date(t);function p(x){return ('0'+x).slice(-2);}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
+
+Store.listOutbox().then(function (list) {
+  list.sort(function (a, b) { return b.submittedAt - a.submittedAt; });
+  var app = document.getElementById('app');
+  if (!list.length) {
+    app.innerHTML = '<div class="card"><h2>没有待交记录</h2><div class="hint">打完分并提交后，生成的检查表会登记在这里。' +
+      '发回计划经营科并确认导入后，可在此标记已交。</div></div>';
+    return;
+  }
+  var h = '<div class="card"><h2>共 ' + list.length + ' 条</h2><div class="hint">按提交时间倒序。仅作登记，文件本身在手机下载目录或微信里。</div></div>';
+  list.forEach(function (r) {
+    h += '<div class="card">';
+    h += '<div class="sum-row"><span>油站 / 月份</span><b>' + esc(r.station) + ' · ' + esc(r.month) + '</b></div>';
+    h += '<div class="sum-row"><span>检查人</span><b>' + esc(r.inspector || '') + '</b></div>';
+    h += '<div class="sum-row"><span>折算得分</span><b>' + (r.converted || 0).toFixed(2) + '（' + esc(r.grade || '') + '）</b></div>';
+    h += '<div class="sum-row"><span>提交时间</span><b>' + dt(r.submittedAt) + '</b></div>';
+    if (r.vetoed) h += '<div class="warn" style="margin:8px 0">该次检查已触发一票否决。</div>';
+    h += '<div class="hint" style="margin:8px 0 10px;word-break:break-all">' + esc(r.fileName || '') + '</div>';
+    h += '<button class="btn btn-ghost btn-block" data-del="' + esc(r.id) + '">标记为已交（移除）</button>';
+    h += '</div>';
+  });
+  app.innerHTML = h;
+  app.addEventListener('click', function (e) {
+    var id = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (!id) return;
+    Store.removeOutbox(id).then(function () { location.reload(); });
+  });
+}).catch(function () {
+  document.getElementById('app').innerHTML = '<div class="err">本机存储不可用（可能是浏览器隐私模式）。</div>';
+});
+</script>
+</body>
+</html>

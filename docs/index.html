@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>加油站综合考核工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f4e5f">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="row">
+    <div>
+      <h1>加油站综合考核工作台</h1>
+      <div class="sub">体系A V2.1 · 油品人效 50% ＋ 非油 20% ＋ 运营检查 30%</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="entry-grid" style="margin-top:14px">
+    <a class="entry" href="score.html">
+      <div class="t">现场检查打分</div>
+      <div class="d">6 项否决 ＋ 73 项判定，离线可填，提交生成 Excel</div>
+    </a>
+    <a class="entry" href="rank.html">
+      <div class="t">综合排名榜</div>
+      <div class="d">15 站综合得分、三段得分与等级</div>
+    </a>
+    <a class="entry" href="calc.html">
+      <div class="t">人效算例</div>
+      <div class="d">SGE → 在岗人数 → 扣 4 人 → 人效，四步自算</div>
+    </a>
+    <a class="entry" href="inbox.html">
+      <div class="t">待交箱</div>
+      <div class="d">已生成未回传的检查表，防止漏交</div>
+    </a>
+  </div>
+
+  <div class="card">
+    <h2>这套体系怎么算分</h2>
+    <div class="sum-row"><span>油品人效段</span><b>本站人效 ÷ 当月最高人效 × 50</b></div>
+    <div class="sum-row"><span>非油增长段</span><b>20 × 增长指数（封顶 40）</b></div>
+    <div class="sum-row"><span>运营检查段</span><b>检查折算分 × 30%</b></div>
+    <div class="sum-row"><span>投诉扣分</span><b>升级投诉 −10 分/件</b></div>
+    <div class="sum-row"><span>进步加分</span><b>人效同比每升 1% 加 0.2（≤3）</b></div>
+    <div class="hint" style="margin-top:10px">基线 100 分，非油封顶时理论满分 120。等级线：≥90 优秀 / 80 良好 / 70 合格 / &lt;70 不合格。</div>
+  </div>
+
+  <div class="card">
+    <h2>本次检查周期</h2>
+    <div class="hint">
+      每月 25—31 日现场打分 → 次月 3 日站端报数 → 5 日核算 → 7 日投诉统计 → 10 日发布排名 → 15 日后 3 位提交分析报告。
+    </div>
+  </div>
+
+  <div style="height:30px"></div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>

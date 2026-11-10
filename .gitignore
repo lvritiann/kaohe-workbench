@@ -1,0 +1,15 @@
+# 考核方案与内部公文不上传公网仓库
+*.docx
+*.xlsx
+*.xls
+*.pdf
+~$*
+
+# 本机工具与运行时目录
+tools/
+inbox/
+.workbuddy/
+
+# 系统残留
+.DS_Store
+Thumbs.db
