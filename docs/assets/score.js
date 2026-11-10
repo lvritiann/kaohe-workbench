@@ -18,6 +18,21 @@
   var $ = function (id) { return document.getElementById(id); };
   var esc = UI.esc;
 
+  /* xlsx 库按需加载：881KB，不能拖慢首屏 */
+  var xlsxPromise = null;
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (xlsxPromise) return xlsxPromise;
+    xlsxPromise = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = 'assets/vendor/xlsx.full.min.js';
+      sc.onload = function () { resolve(window.XLSX); };
+      sc.onerror = function () { xlsxPromise = null; reject(new Error('生成库加载失败，请联网后重试')); };
+      document.head.appendChild(sc);
+    });
+    return xlsxPromise;
+  }
+
   function nowMonth() {
     var d = new Date();
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
@@ -337,6 +352,17 @@
   }
 
   function doGenerate(r, v) {
+    if (!window.XLSX) {
+      showSheet('<div class="sheet__grip"></div><h3>正在准备生成器</h3><div class="hint">首次提交需加载 Excel 生成库，请稍候…</div>');
+    }
+    loadXLSX().then(function () { writeOut(r, v); })
+      .catch(function (e) {
+        showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(e.message) +
+          '</div><div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
+      });
+  }
+
+  function writeOut(r, v) {
     var ts = new Date();
     var stamp = ts.getFullYear() + ('0' + (ts.getMonth() + 1)).slice(-2) + ('0' + ts.getDate()).slice(-2) +
       ('0' + ts.getHours()).slice(-2) + ('0' + ts.getMinutes()).slice(-2);
@@ -429,4 +455,9 @@
   }
 
   boot();
+
+  /* 空闲时预热生成库，保证到站无网也能出文件 */
+  window.addEventListener('load', function () {
+    setTimeout(function () { loadXLSX().catch(function () { }); }, 5000);
+  });
 })();
