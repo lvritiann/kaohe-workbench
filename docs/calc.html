@@ -10,11 +10,11 @@
 <body>
 
 <header class="appbar">
-  <div class="appbar__eyebrow">EFFICIENCY CALCULATOR</div>
+  <div class="appbar__eyebrow">EFFICIENCY · V3 车次模型</div>
   <div class="appbar__row">
     <div style="min-width:0">
       <h1 class="appbar__title">人效算例</h1>
-      <div class="appbar__sub">选站即出数，不用手填</div>
+      <div class="appbar__sub" id="subTitle">选站即出数，五步可复算</div>
     </div>
     <button class="theme-btn" id="themeBtn" aria-label="切换主题"></button>
   </div>
@@ -28,7 +28,7 @@
       <select id="fStation"><option value="">手动输入（不选站）</option></select>
     </div>
     <p class="hint" id="srcNote" style="margin-top:10px">
-      数据来源：2023—2025 三年平均日均销量、2026 年 9 月实际在岗人数（含缺员修正）。
+      口径源自《油品人效考核测算表》：车次×系数 ＋ 升数×系数。
     </p>
   </section>
 
@@ -36,40 +36,40 @@
 
   <section class="card" id="paramCard" style="display:none">
     <div class="sect__head" style="margin-bottom:10px">
-      <span class="sect__title">参数</span>
-      <span class="sect__hint">可改</span>
+      <span class="sect__title">参数</span><span class="sect__hint">可改</span>
     </div>
-    <div class="field"><label>日均汽油（吨）</label><input type="text" id="gas" inputmode="decimal"></div>
-    <div class="field"><label>日均柴油（吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
-    <div class="field"><label>实际在岗人数（考勤折算）</label><input type="text" id="onduty" inputmode="decimal"></div>
-    <div class="field"><label>三年平均在册人数</label><input type="text" id="reg" inputmode="decimal"></div>
-    <div class="field"><label>当月全公司最高人效</label><input type="text" id="maxeff" inputmode="decimal" value="96.1"></div>
+    <div class="field"><label>汽油（吨）</label><input type="text" id="gas" inputmode="decimal"></div>
+    <div class="field"><label>柴油（吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
+    <div class="field"><label>在册人数（含站长／劳务／病产假）</label><input type="text" id="head" inputmode="decimal"></div>
+    <div class="field"><label>折算天数（月累计时填当月营业天数）</label><input type="text" id="days" inputmode="decimal" value="1"></div>
+    <div class="field"><label>当月全公司最高修正后人效</label><input type="text" id="maxAdj" inputmode="decimal" placeholder="如 68.5"></div>
   </section>
 
   <div id="manual">
     <section class="card" style="margin-top:16px">
-      <div class="hint">选择油站后自动带出参数并出结果；也可以直接手填下面几项。</div>
-      <div class="field"><label>日均汽油（吨）</label><input type="text" id="g2" inputmode="decimal" placeholder="如 23.98"></div>
-      <div class="field"><label>日均柴油（吨）</label><input type="text" id="d2" inputmode="decimal" placeholder="如 40.42"></div>
-      <div class="field"><label>实际在岗人数</label><input type="text" id="o2" inputmode="decimal" placeholder="如 30"></div>
-      <div class="field"><label>三年平均在册人数</label><input type="text" id="r2" inputmode="decimal" placeholder="如 30"></div>
+      <div class="hint">选择油站后自动带出参数并出结果；也可直接手填。</div>
+      <div class="field"><label>汽油（吨）</label><input type="text" id="g2" inputmode="decimal" placeholder="如 30.64"></div>
+      <div class="field"><label>柴油（吨）</label><input type="text" id="d2" inputmode="decimal" placeholder="如 7.66"></div>
+      <div class="field"><label>在册人数</label><input type="text" id="h2" inputmode="decimal" placeholder="如 23"></div>
+      <div class="field"><label>折算天数</label><input type="text" id="t2" inputmode="decimal" value="1"></div>
       <button class="btn btn--primary btn--block" id="go" style="margin-top:18px">计算</button>
     </section>
   </div>
 
   <div class="sect__head" style="margin-top:22px"><span class="sect__title">口径速查</span></div>
   <section class="card">
-    <div class="kv"><span>1 吨汽油</span><b>55.65 SGE</b></div>
-    <div class="kv"><span>1 吨柴油</span><b>28.80 SGE</b></div>
-    <div class="kv"><span>基础人数</span><b>统一扣 4 人</b></div>
-    <div class="kv"><span>缺员修正阈值</span><b>&gt; 20%</b></div>
-    <div class="kv"><span>基准人效</span><b>65.26</b></div>
-    <div class="kv"><span>合格线 / 优秀线</span><b>58.73 / 71.79</b></div>
+    <div class="kv"><span>汽油 SGE</span><b>车次×1.0 ＋ 升数×0.01</b></div>
+    <div class="kv"><span>柴油 SGE</span><b>车次×1.8 ＋ 升数×0.012</b></div>
+    <div class="kv"><span>车次估算</span><b>汽油÷31.5升 · 柴油÷150升</b></div>
+    <div class="kv"><span>吨换升</span><b>汽油 1333 · 柴油 1200</b></div>
+    <div class="kv"><span>实际人效</span><b>日SGE ÷ 在册人数</b></div>
+    <div class="kv"><span>修正系数</span><b>56.7 ÷ 预期人效（上限1.5）</b></div>
+    <div class="kv kv--total"><span>排名依据</span><b>修正后人效</b></div>
   </section>
 
   <p class="sect__note" style="margin-top:14px">
-    缺员率 ＝（三年平均在册 − 实际在岗）÷ 三年平均在册，超过 20% 时分母改按
-    max(在岗, 在册×80%) − 4 核定。当月实际数据以站端报送为准，此处为基准参考值。
+    在册人数＝统计期内该站领工资的全部人员，不按出勤折算。修正系数每年 1 月重算、当年固定，
+    用于抹平大小站规模差异（大站＜1、小站＞1）。
   </p>
 
 </main>
@@ -92,10 +92,12 @@ fetch('data/stations.json', { cache: 'no-cache' })
     j.stations.forEach(function (s) {
       var op = document.createElement('option');
       op.value = s.name;
-      op.textContent = s.name + '　' + s.totalTon + ' 吨 · 人效 ' + s.efficiency;
+      op.textContent = s.name + '　' + s.dayTon + ' 吨 · 修正后 ' + s.adjEff;
       sel.appendChild(op);
     });
     sel.addEventListener('change', function () { pick(this.value); });
+    document.getElementById('srcNote').textContent =
+      j.basis + '（已逐站复算校验，与测算表一致）';
   })
   .catch(function () {
     document.getElementById('srcNote').textContent = '基准数据未加载，请手动填写。';
@@ -103,7 +105,13 @@ fetch('data/stations.json', { cache: 'no-cache' })
 
 function pick(name) {
   var box = document.getElementById('out');
-  if (!name) { box.innerHTML = ''; document.getElementById('paramCard').style.display = 'none'; return; }
+  if (!name) {
+    box.innerHTML = '';
+    document.getElementById('paramCard').style.display = 'none';
+    document.getElementById('manual').style.display = 'block';
+    CUR = null;
+    return;
+  }
   var s = null;
   ST.stations.forEach(function (x) { if (x.name === name) s = x; });
   if (!s) return;
@@ -113,18 +121,14 @@ function pick(name) {
   document.getElementById('manual').style.display = 'none';
   document.getElementById('gas').value = s.gasTon;
   document.getElementById('diesel').value = s.dieselTon;
-  document.getElementById('onduty').value = s.onDuty;
-  document.getElementById('reg').value = s.avgRegistered;
-
-  var note = document.getElementById('srcNote');
-  note.textContent = s.avgRegisteredKnown
-    ? '已带出 ' + s.name + ' 的基准值（在册人数为方案公布值）。可直接改。'
-    : '已带出 ' + s.name + ' 的基准值。在册人数方案未逐站公布，暂按与在岗相同处理，缺员率会显示为 0。可直接改。';
+  document.getElementById('head').value = s.head;
+  document.getElementById('days').value = 1;
+  document.getElementById('maxAdj').value = ST.stations[0].adjEff;
 
   compute();
 }
 
-['gas', 'diesel', 'onduty', 'reg', 'maxeff'].forEach(function (id) {
+['gas', 'diesel', 'head', 'days', 'maxAdj'].forEach(function (id) {
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === id && CUR) compute();
   });
@@ -133,60 +137,74 @@ function pick(name) {
 document.getElementById('go').addEventListener('click', function () {
   var g = parseFloat(document.getElementById('g2').value) || 0;
   var d = parseFloat(document.getElementById('d2').value) || 0;
-  var on = parseFloat(document.getElementById('o2').value) || 0;
-  var reg = parseFloat(document.getElementById('r2').value) || 0;
-  if (on <= 0) { document.getElementById('out').innerHTML = '<div class="err">请填写实际在岗人数。</div>'; return; }
-  if (g + d <= 0) { document.getElementById('out').innerHTML = '<div class="err">请至少填写一种油品的日均销量。</div>'; return; }
-  render({ gasTon: g, dieselTon: d, onDuty: on, avgRegistered: reg || on }, 96.1, null);
+  var h = parseFloat(document.getElementById('h2').value) || 0;
+  var t = parseFloat(document.getElementById('t2').value) || 1;
+  if (h <= 0) { document.getElementById('out').innerHTML = '<div class="err">请填写在册人数。</div>'; return; }
+  if (g + d <= 0) { document.getElementById('out').innerHTML = '<div class="err">请至少填写一种油品。</div>'; return; }
+  render({ gasTon: g, dieselTon: d, head: h, days: t }, 0, null);
 });
 
 function compute() {
   var g = parseFloat(document.getElementById('gas').value) || 0;
   var d = parseFloat(document.getElementById('diesel').value) || 0;
-  var on = parseFloat(document.getElementById('onduty').value) || 0;
-  var reg = parseFloat(document.getElementById('reg').value) || 0;
-  var mx = parseFloat(document.getElementById('maxeff').value) || 0;
-  if (on <= 0) return;
-  render({ gasTon: g, dieselTon: d, onDuty: on, avgRegistered: reg || on }, mx, CUR);
+  var h = parseFloat(document.getElementById('head').value) || 0;
+  var t = parseFloat(document.getElementById('days').value) || 1;
+  var mx = parseFloat(document.getElementById('maxAdj').value) || 0;
+  if (h <= 0) return;
+  render({ gasTon: g, dieselTon: d, head: h, days: t }, mx, CUR);
 }
 
-function render(inp, maxEff, st) {
-  var r = Engine.efficiency(inp);
-  var tag = r.grade === '优秀' ? 'ok' : r.grade === '不合格' ? 'no' : '';
+function render(inp, maxAdj, st) {
+  var r = Engine.efficiency({
+    gasTon: inp.gasTon, dieselTon: inp.dieselTon,
+    head: inp.head, days: inp.days, station: st ? st.name : null
+  });
+
+  var tone = r.grade === '优秀' ? 'ok' : (r.grade === '不合格' ? 'no' : '');
   var h = '';
 
   h += '<div class="card" style="margin-top:16px"><div class="meter">';
   h += '<div class="meter__main">';
-  h += '<div class="meter__num">' + r.efficiency.toFixed(2) + '<small>SGE / 人 / 日</small></div>';
-  h += '<div class="meter__sub">达成率 ' + (r.rate * 100).toFixed(1) + '% · 基准 65.26</div>';
-  h += '</div><span class="tag ' + tag + '">' + r.grade + '</span></div></div>';
+  h += '<div class="meter__num">' + r.adjEff.toFixed(2) + '<small>修正后 SGE/人/日</small></div>';
+  h += '<div class="meter__sub">实际 ' + r.eff.toFixed(2) + ' × 系数 ' + r.coeff.toFixed(3) +
+    ' · 达成 ' + (r.rate * 100).toFixed(1) + '%（基准 56.7）</div>';
+  h += '</div><span class="tag ' + tone + '">' + r.grade + '</span></div></div>';
 
-  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">计算过程</span>' +
-    '<span class="sect__hint">四步</span></div><section class="card">';
-  h += '<div class="kv"><span>① SGE 总量</span><b>' + inp.gasTon.toFixed(2) + '×55.65 ＋ ' +
-    inp.dieselTon.toFixed(2) + '×28.80 ＝ ' + r.sge + '</b></div>';
-  h += '<div class="kv"><span>② 人数分母</span><b>' + r.denomBase + ' − 4 ＝ ' + r.denom + '</b></div>';
-  h += '<div class="kv"><span>③ 人效</span><b>' + r.sge + ' ÷ ' + r.denom + ' ＝ ' + r.efficiency + '</b></div>';
-  h += '<div class="kv"><span>④ 达成率</span><b>' + r.efficiency + ' ÷ 65.26 ＝ ' +
-    (r.rate * 100).toFixed(1) + '%</b></div>';
+  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">五步复算</span>' +
+    '<span class="sect__hint">' + r.days + ' 天口径</span></div><section class="card">';
+
+  h += '<div class="kv"><span>① 吨 → 升</span><b>汽油 ' + r.gasTon + '×1333＝' + r.gasLitre.toLocaleString() +
+    '　柴油 ' + r.dieselTon + '×1200＝' + r.dieselLitre.toLocaleString() + '</b></div>';
+  h += '<div class="kv"><span>② 升 → 车次</span><b>汽油 ' + r.gasCars + ' 车　柴油 ' + r.dieselCars + ' 车</b></div>';
+  h += '<div class="kv"><span>③ SGE</span><b>汽油 ' + r.gasSge + ' ＋ 柴油 ' + r.dieselSge + ' ＝ ' +
+    r.totalSge.toLocaleString() + '</b></div>';
+  h += '<div class="kv"><span>④ 实际人效</span><b>' + r.totalSge + ' ÷ ' + r.days + ' ÷ ' + r.head +
+    ' ＝ ' + r.eff.toFixed(2) + '</b></div>';
+  h += '<div class="kv"><span>⑤ 修正系数</span><b>' + r.coeff.toFixed(3) +
+    '（' + r.coeffFrom + '，预期人效 ' + r.expectedEff + '）</b></div>';
+  h += '<div class="kv kv--total"><span>修正后人效</span><b>' + r.eff.toFixed(2) + ' × ' + r.coeff.toFixed(3) +
+    ' ＝ ' + r.adjEff.toFixed(2) + '</b></div>';
   h += '</section>';
 
-  if (r.corrected) {
-    h += '<div class="warn">缺员率 ' + (r.shortage * 100).toFixed(1) +
-      '%，超过 20%，触发缺员修正：分母按 max(在岗, 在册×80%) 核定。</div>';
+  if (r.coeff >= 1.5) {
+    h += '<div class="warn">该站修正系数已触顶 1.5（日均 ' + r.dayTon + ' 吨，属极小站）。' +
+      '系数再大也不能超过 1.5，这是防止极端值失真的保护线。</div>';
+  }
+  if (r.coeff <= 0.5) {
+    h += '<div class="warn">该站修正系数触底 0.5，规模远高于全公司平均，人效按折半计入。</div>';
   }
 
-  if (maxEff > 0) {
-    var seg = Math.round(r.efficiency / maxEff * CFG.weights.eff * 100 * 100) / 100;
+  if (maxAdj > 0) {
+    var seg = Engine.effSegment(r.adjEff, maxAdj, 50);
     h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">折算成多少分</span></div>';
     h += '<section class="card">';
-    h += '<div class="kv kv--total"><span>人效段</span><b>' + r.efficiency + ' ÷ ' + maxEff + ' × 50 ＝ ' +
-      seg.toFixed(2) + '</b></div>';
+    h += '<div class="kv kv--total"><span>人效段（占 50 分）</span><b>' + r.adjEff.toFixed(2) + ' ÷ ' +
+      maxAdj + ' × 50 ＝ ' + seg.toFixed(2) + '</b></div>';
     h += '<div class="kv"><span>若非油达标（20 分）</span><b>' + (seg + 20).toFixed(2) + '</b></div>';
     h += '<div class="kv"><span>再＋检查 90 分（27 分）</span><b>' + (seg + 20 + 27).toFixed(2) + '</b></div>';
     h += '</section>';
-    h += '<p class="sect__note" style="margin-top:12px">非油指数每 0.1 加 2 分，检查分 ×30%。' +
-      '两项均无投诉、无进步加分时如上。</p>';
+    h += '<p class="sect__note" style="margin-top:12px">人效段按「修正后人效 ÷ 当月最高修正后人效 × 50」折算；' +
+      '非油每 0.1 指数加 2 分，检查分 ×30%。</p>';
   }
 
   document.getElementById('out').innerHTML = h;
