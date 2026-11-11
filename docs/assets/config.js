@@ -1,79 +1,60 @@
-/* 全局配置 V3 —— 口径依据《油品人效考核测算表》（2025 数据测算，R²=0.9222）
+/* 全局配置 V4 —— 依据《高速公路加油站目标责任考核方案》V1.0（2026年11月定稿）
  *
- * 与 V2 的差异（务必注意）：
- *   1. SGE 改为「车次×系数 ＋ 升数×系数」推导；1 吨汽油仍折 55.65、1 吨柴油 28.80，结果一致
- *   2. 分母改为「在册人数」，不再扣减 4 名基础人数
- *   3. 规模差异改由「修正系数」抹平（0.69~1.50，按站固定，每年 1 月重算）
- *   4. 基准人效 56.7（原 65.26）；排名依据为「修正后人效」
+ * 四段结构（基准 100 / 封顶 120）：
+ *   油品销量 45（封顶53） 非油销量 10（封顶12） 油品人效 15（封顶25） 现场管理 30（封顶30）
+ * 综合得分 = 油品段 + 非油段 + 人效段 + 管理段 − 投诉扣分 + 进步加分
+ * 不设等级，只出 1–15 名排名。
+ *
+ * 人效：当量 = 汽油×56 + 柴油×28；分母 = 实际在岗 − 4；得分 = 人效 ÷ 65 × 15（封顶25）
  */
 window.CFG = {
-  version: 'V3',
+  version: 'V4',
 
   stations: [
     '富平', '汉中', '秦岭', '华山', '白河', '宁陕', '韩城', '南沙',
     '旬阳', '天汉水城', '洋县', '玉华宫', '富县', '照金', '略阳'
   ],
 
+  /* ---------------- 四段分值 ---------------- */
+  seg: {
+    oil:     { base: 45, cap: 53 },
+    nonoil:  { base: 10, cap: 12 },
+    eff:     { base: 15, cap: 25 },
+    inspect: { base: 30, cap: 30 }
+  },
+
+  /* 少扣多奖：完成率≥100% 用 bonus 斜率，<100% 用 penalty 斜率 */
+  scoreRule: { bonus: 1.5, penalty: 0.5 },
+
+  /* ---------------- 人效段 ---------------- */
+  hr: {
+    sgeGas: 56,          /* 汽油 SGE/吨：1吨约1350升，按32升/车约42车次 */
+    sgeDiesel: 28,       /* 柴油 SGE/吨：约为汽油一半 */
+    baseHeadcount: 4,    /* 最低开班配置：24小时两班倒，每班至少2人 */
+    benchmark: 65,       /* 基准人效，15站算术平均 */
+    fullAt: 1.67         /* 达基准 1.67 倍时封顶 */
+  },
+
+  /* ---------------- 非油段 ---------------- */
+  nonoil: { salesWeight: 5, marginWeight: 5, capEach: 6 },
+
+  /* ---------------- 现场管理段 ---------------- */
   inspect: {
     total: 100,
-    gradeLines: { excellent: 90, good: 80, pass: 70 },
-    weight: 0.30
+    weight: 0.30,
+    gradeLines: { excellent: 90, good: 80, pass: 70 }
   },
 
-  weights: { eff: 0.50, nonoil: 0.20, inspect: 0.30 },
-
-  /* ---------------- 人效口径 V3 ---------------- */
-  hr: {
-    sge: {
-      gasCarWeight: 1.0,      /* 汽油车次系数 */
-      gasLitreWeight: 0.01,   /* 汽油升数系数 */
-      dieselCarWeight: 1.8,   /* 柴油车次系数：一次柴油作业≈1.8 次汽油 */
-      dieselLitreWeight: 0.012
-    },
-
-    gasLitrePerCar: 31.5,     /* 汽油平均每车升数（25~38 中值） */
-    dieselLitrePerCar: 150,   /* 柴油平均每车升数（80~220 中值） */
-    gasLitrePerTon: 1333,     /* 1 吨汽油 = 1333 升 */
-    dieselLitrePerTon: 1200,  /* 1 吨柴油 = 1200 升 */
-
-    sgeGas: 55.65,            /* 简化系数，可由上面精确推出 */
-    sgeDiesel: 28.80,
-
-    regA: 22.1638,            /* 预期人效 = a×ln(日均吨) + b */
-    regB: -11.5326,
-    regR2: 0.9222,
-
-    benchmark: 56.7,          /* 基准人效（对应日均 21.7 吨） */
-    coeffCap: 1.5,
-    coeffFloor: 0.5,
-
-    /* 等级线按达成率划分（修正后人效 ÷ 基准） */
-    lines: { excellent: 1.10, good: 1.00, pass: 0.90, warn: 0.80 }
+  /* ---------------- 投诉扣分 ---------------- */
+  complaint: {
+    escalate: 10,     /* 一般升级投诉 */
+    repeat: 20,       /* 重复投诉 */
+    regulator: 50,    /* 监管介入 / 媒体曝光 / 群体投诉 */
+    major: 'veto'     /* 重大投诉一票否决 */
   },
 
-  /* 15 站修正系数与在册人数（2025 年数据测算，当年内固定，每年 1 月重算） */
-  stationCoeff: {
-    '富平':     { coeff: 0.818, head: 23, dayTon: 38.3, gasShare: 0.80 },
-    '汉中':     { coeff: 0.981, head: 16, dayTon: 22.8, gasShare: 0.62 },
-    '秦岭':     { coeff: 0.844, head: 25, dayTon: 34.8, gasShare: 0.80 },
-    '华山':     { coeff: 0.690, head: 31, dayTon: 68.4, gasShare: 0.33 },
-    '白河':     { coeff: 1.192, head: 14, dayTon: 14.4, gasShare: 0.64 },
-    '宁陕':     { coeff: 0.965, head: 21, dayTon: 23.8, gasShare: 0.83 },
-    '韩城':     { coeff: 0.951, head: 21, dayTon: 24.8, gasShare: 0.76 },
-    '南沙':     { coeff: 0.948, head: 15, dayTon: 25.0, gasShare: 0.20 },
-    '旬阳':     { coeff: 1.320, head: 12, dayTon: 11.7, gasShare: 0.46 },
-    '天汉水城': { coeff: 0.954, head: 17, dayTon: 24.5, gasShare: 0.32 },
-    '洋县':     { coeff: 1.050, head: 21, dayTon: 19.2, gasShare: 0.70 },
-    '玉华宫':   { coeff: 1.500, head: 15, dayTon: 7.9,  gasShare: 0.83 },
-    '富县':     { coeff: 1.500, head: 12, dayTon: 5.0,  gasShare: 0.82 },
-    '照金':     { coeff: 1.500, head: 11, dayTon: 3.1,  gasShare: 0.79 },
-    '略阳':     { coeff: 1.500, head: 8,  dayTon: 1.7,  gasShare: 0.59 }
-  },
+  progressCap: 3,     /* 进步加分：人效同比每升1%加0.2，上限3 */
+  progressPerPct: 0.2,
 
-  submitPass: 'SFYD-2027',
-
-  nonoilCap: 2.0,
-  nonoilBase: 20,
-  complaintPerCase: 10,
-  progressCap: 3
+  submitPass: 'SFYD-2027'
 };

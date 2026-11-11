@@ -73,20 +73,19 @@ function render(d) {
   h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">全部排名</span>' +
     '<span class="sect__hint">' + rows.length + ' 站</span></div>';
   h += '<section class="card card--flush" style="padding:12px 14px 4px"><table class="tbl"><thead><tr>' +
-    '<th style="width:30px">#</th><th>油站</th><th class="num">人效</th><th class="num">非油</th>' +
-    '<th class="num">检查</th><th class="num">综合</th><th style="width:46px">等级</th>' +
+    '<th style="width:30px">#</th><th>油站</th><th class="num">油品</th><th class="num">非油</th><th class="num">人效</th>' +
+    '<th class="num">管理</th><th class="num">综合</th>' +
     '</tr></thead><tbody>';
 
   rows.forEach(function (s, i) {
-    var tag = s.grade === '优秀' ? 'ok' : s.grade === '不合格' ? 'no' : '';
     h += '<tr>';
     h += '<td class="rk">' + (i + 1) + '</td>';
     h += '<td><b>' + UI.esc(s.name) + '</b>' + (s.vetoed ? ' <span class="tag no">否决</span>' : '') + '</td>';
-    h += '<td class="num">' + n(s.effSeg) + '</td>';
-    h += '<td class="num">' + n(s.nonoilSeg) + '</td>';
-    h += '<td class="num">' + n(s.inspSeg) + '</td>';
+    h += '<td class="num">' + n(s.oilScore) + '</td>';
+    h += '<td class="num">' + n(s.nonoilScore) + '</td>';
+    h += '<td class="num">' + n(s.effScore) + '</td>';
+    h += '<td class="num">' + n(s.inspectScore) + '</td>';
     h += '<td class="num"><b>' + n(s.total) + '</b></td>';
-    h += '<td><span class="tag ' + tag + '">' + UI.esc(s.grade || '') + '</span></td>';
     h += '</tr>';
   });
 
