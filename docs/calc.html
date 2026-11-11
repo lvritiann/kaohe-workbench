@@ -41,7 +41,7 @@
     <div class="field"><label>汽油（吨）</label><input type="text" id="gas" inputmode="decimal"></div>
     <div class="field"><label>柴油（吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
     <div class="field"><label>实际在岗人数</label><input type="text" id="head" inputmode="decimal"></div>
-    <div class="field"><label>分母修正（缺员站专用，留空=按在岗−4）</label><input type="text" id="denomFix" inputmode="decimal" placeholder="如玉华宫填 8"></div>
+    <div class="field"><label>特殊核定分母（一般留空，默认按在岗−4）</label><input type="text" id="denomFix" inputmode="decimal" placeholder="如玉华宫填 8"></div>
   </section>
 
   <section class="card" id="oilCard" style="display:none">
@@ -130,7 +130,7 @@ function pick(name) {
   document.getElementById('gas').value = s.gasTon;
   document.getElementById('diesel').value = s.dieselTon;
   document.getElementById('head').value = s.headcount;
-  document.getElementById('denomFix').value = s.denomFixed ? s.denom : '';
+  document.getElementById('denomFix').value = '';
   document.getElementById('nonSales').value = 100;
   document.getElementById('nonMargin').value = 100;
   document.getElementById('insp').value = 90;
