@@ -19,3 +19,6 @@ Thumbs.db
 
 # GitHub 访问令牌（严禁入库）
 .gh_token*
+
+# 临时校验文件
+_tmp_*
