@@ -77,10 +77,26 @@
       <div class="tile__t">待交箱</div>
       <div class="tile__d">已生成未回传，防漏交</div>
     </a>
+
+    <a class="tile" href="status.html" style="grid-column:span 2">
+      <div class="tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h5"/><circle cx="16" cy="16" r="2"/>
+        </svg>
+      </div>
+      <div class="tile__t">运营管理</div>
+      <div class="tile__d">临时关停 / 部分停业 / 不可抗力 / 复营 —— 口令签发、留痕可查</div>
+    </a>
   </div>
 
+  <section class="card" id="statusBrief" style="display:none">
+    <div class="sect__head" style="margin-bottom:8px"><span class="sect__title">当前运营状态</span>
+      <span class="sect__hint" id="statusCnt"></span></div>
+    <div id="statusList"></div>
+  </section>
+
   <div class="sect__head" style="margin-top:24px">
-    <span class="sect__title">三段分值</span>
+    <span class="sect__title">四段分值</span>
     <span class="sect__hint">基准100 · 封顶120</span>
   </div>
   <section class="card">
@@ -114,6 +130,24 @@
 <nav id="tabbar"></nav>
 
 <script src="assets/ui.js"></script>
-<script>UI.tabbar('home');</script>
+<script src="assets/status.js"></script>
+<script>
+UI.tabbar('home');
+Status.load().then(function () {
+  var list = Status.all().filter(function (r) { return r.active !== false; });
+  if (!list.length) return;
+  var box = document.getElementById('statusBrief');
+  box.style.display = 'block';
+  document.getElementById('statusCnt').textContent = list.length + ' 条';
+  var h = '';
+  list.forEach(function (r) {
+    var t = Status.typeOf(r.status) || { label: r.status };
+    h += '<div class="kv"><span>' + UI.esc(r.station) + '</span><b><span class="tag ' +
+      (r.status === 'temp_closed' ? 'no' : 'na') + '">' + UI.esc(t.label) + '</span> ' +
+      UI.esc(r.from || '') + ' 起</b></div>';
+  });
+  document.getElementById('statusList').innerHTML = h;
+});
+</script>
 </body>
 </html>

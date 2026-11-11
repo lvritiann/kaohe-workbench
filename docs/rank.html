@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050a10">
-<title>综合排名榜 · 综合考核工作台</title>
+<title>综合排名榜 · 目标责任考核</title>
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
 
 <header class="appbar">
-  <div class="appbar__eyebrow">MONTHLY RANKING</div>
+  <div class="appbar__eyebrow">MONTHLY RANKING · V1.0</div>
   <div class="appbar__row">
     <div>
       <h1 class="appbar__title">综合排名榜</h1>
@@ -25,73 +25,126 @@
 <nav id="tabbar"></nav>
 
 <script src="assets/ui.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/status.js"></script>
 <script>
 UI.tabbar('rank');
 
-fetch('data/rank.json', { cache: 'no-cache' })
-  .then(function (r) { if (!r.ok) throw new Error('no file'); return r.json(); })
-  .then(render)
-  .catch(function () {
-    document.getElementById('sub').textContent = '暂无数据';
-    document.getElementById('app').innerHTML =
-      '<div class="card" style="margin-top:16px"><div class="sect__head"><span class="sect__title">还没有发布排名</span></div>' +
-      '<div class="hint">排名数据由计划经营科每月核算后导出，文件为 <b>data/rank.json</b>。' +
-      '科室运行汇总脚本后自动更新，页面刷新即可看到。</div></div>';
-  });
+var month = new Date().toISOString().slice(0, 7);
+
+Promise.all([
+  fetch('data/rank.json', { cache: 'no-cache' }).then(function (r) {
+    if (!r.ok) throw new Error('no rank'); return r.json();
+  }),
+  Status.load()
+]).then(function (all) { render(all[0]); })
+  .catch(function () { render(null); });
 
 function n(v) { return (v == null || v === '') ? '—' : Number(v).toFixed(2); }
+function two(x) { return (x < 10 ? '0' : '') + x; }
 
 function render(d) {
-  document.getElementById('sub').textContent = (d.month || '本期') + ' · 更新于 ' + (d.updatedAt || '—');
+  var rows = ((d && d.stations) || []).slice();
+  var active = [], closed = [];
 
-  var rows = (d.stations || []).slice().sort(function (a, b) { return b.total - a.total; });
-  if (!rows.length) {
-    document.getElementById('app').innerHTML =
-      '<div class="card" style="margin-top:16px"><div class="hint">本月尚无已核算的站点。</div></div>';
-    return;
-  }
+  rows.forEach(function (s) {
+    var st = Status.label(s.name, d && d.month ? d.month.slice(0, 7) : month);
+    s._status = st;
+    if (Status.excluded(s.name, d && d.month ? d.month.slice(0, 7) : month)) closed.push(s);
+    else active.push(s);
+  });
+
+  /* 即使本月排名尚未发布，台账里的停业站也要显示 */
+  Status.all().forEach(function (r) {
+    if (r.active === false) return;
+    var m = d && d.month ? d.month.slice(0, 7) : month;
+    if (!Status.excluded(r.station, m)) return;
+    if (closed.some(function (x) { return x.name === r.station; })) return;
+    closed.push({
+      name: r.station,
+      _status: {
+        code: r.status, text: (Status.typeOf(r.status) || {}).label || r.status,
+        from: r.from || '', to: r.to || '', reason: r.reason || '',
+        operator: r.operator || '', id: r.id || ''
+      }
+    });
+  });
+
+  active.sort(function (a, b) {
+    if (!!a.vetoed !== !!b.vetoed) return a.vetoed ? 1 : -1;
+    if (b.total !== a.total) return b.total - a.total;
+    return (b.oilScore || 0) - (a.oilScore || 0);
+  });
+
+  document.getElementById('sub').textContent =
+    (d && d.month ? d.month : month) + ' · ' + active.length + ' 站参评' +
+    (closed.length ? ' · ' + closed.length + ' 站停业' : '') +
+    (d && d.updatedAt ? ' · 更新 ' + d.updatedAt : '');
 
   var h = '';
 
-  if (rows.length >= 3) {
+  if (closed.length) {
+    h += '<div class="sect__head" style="margin-top:18px"><span class="sect__title">停业站</span>' +
+      '<span class="sect__hint">不出分 · 不参与排名</span></div>';
+    closed.forEach(function (s) {
+      h += '<section class="card"><div class="kv"><span>油站</span><b>' + UI.esc(s.name) +
+        ' <span class="tag no">' + UI.esc(s._status ? s._status.text : '停业') + '</span></b></div>';
+      h += '<div class="kv"><span>起止</span><b>' + UI.esc(s._status ? s._status.from : '') +
+        ' 起' + (s._status && s._status.to ? ' 至 ' + UI.esc(s._status.to) : '（持续）') + '</b></div>';
+      h += '<div class="kv"><span>原因</span><b>' + UI.esc(s._status ? s._status.reason : '') + '</b></div>';
+      h += '<div class="kv"><span>签发</span><b>' + UI.esc(s._status ? s._status.operator : '') +
+        ' · ' + UI.esc(s._status ? s._status.id : '') + '</b></div></section>';
+    });
+    h += '<p class="sect__note" style="margin-top:8px">停业当月不出分、不参与排名；' +
+      '年度按实际经营月份加权平均；现场管理段不外推、不计 0 分；复营后次月重新入榜。</p>';
+  }
+
+  if (!active.length) {
+    h += '<div class="card" style="margin-top:16px"><div class="sect__head">' +
+      '<span class="sect__title">还没有发布排名</span></div>' +
+      '<div class="hint">排名数据由计划经营科每月核算后导出至 <b>data/rank.json</b>。</div></div>';
+    document.getElementById('app').innerHTML = h;
+    return;
+  }
+
+  if (active.length >= 3) {
     h += '<div class="sect__head" style="margin-top:18px"><span class="sect__title">前三名</span>' +
-      '<span class="sect__hint">发榜 · 评优优先</span></div>';
-    h += '<div class="podium">';
-    var order = [1, 0, 2];
-    order.forEach(function (i) {
-      var s = rows[i];
+      '<span class="sect__hint">发榜 · 评优优先</span></div><div class="podium">';
+    [1, 0, 2].forEach(function (i) {
+      var s = active[i];
       if (!s) return;
-      h += '<div class="podium__item' + (i === 0 ? ' first' : '') + '">';
-      h += '<div class="podium__rank">NO.' + (i + 1) + '</div>';
-      h += '<div class="podium__name">' + UI.esc(s.name) + '</div>';
-      h += '<div class="podium__score">' + n(s.total) + '</div>';
-      h += '</div>';
+      h += '<div class="podium__item' + (i === 0 ? ' first' : '') + '">' +
+        '<div class="podium__rank">NO.' + (i + 1) + '</div>' +
+        '<div class="podium__name">' + UI.esc(s.name) + '</div>' +
+        '<div class="podium__score">' + n(s.total) + '</div></div>';
     });
     h += '</div>';
   }
 
   h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">全部排名</span>' +
-    '<span class="sect__hint">' + rows.length + ' 站</span></div>';
+    '<span class="sect__hint">' + active.length + ' 站</span></div>';
   h += '<section class="card card--flush" style="padding:12px 14px 4px"><table class="tbl"><thead><tr>' +
-    '<th style="width:30px">#</th><th>油站</th><th class="num">油品</th><th class="num">非油</th><th class="num">人效</th>' +
-    '<th class="num">管理</th><th class="num">综合</th>' +
+    '<th style="width:28px">#</th><th>油站</th><th class="num">油品</th><th class="num">非油</th>' +
+    '<th class="num">人效</th><th class="num">管理</th><th class="num">综合</th>' +
     '</tr></thead><tbody>';
 
-  rows.forEach(function (s, i) {
-    h += '<tr>';
-    h += '<td class="rk">' + (i + 1) + '</td>';
-    h += '<td><b>' + UI.esc(s.name) + '</b>' + (s.vetoed ? ' <span class="tag no">否决</span>' : '') + '</td>';
+  active.forEach(function (s, i) {
+    h += '<tr><td class="rk">' + (i + 1) + '</td>';
+    h += '<td><b>' + UI.esc(s.name) + '</b>' + (s.vetoed ? ' <span class="tag no">否决</span>' : '');
+    if (s._status && s._status.code !== 'normal') {
+      h += ' <span class="tag na">' + UI.esc(s._status.text) + '</span>';
+    }
+    h += '</td>';
     h += '<td class="num">' + n(s.oilScore) + '</td>';
     h += '<td class="num">' + n(s.nonoilScore) + '</td>';
     h += '<td class="num">' + n(s.effScore) + '</td>';
     h += '<td class="num">' + n(s.inspectScore) + '</td>';
-    h += '<td class="num"><b>' + n(s.total) + '</b></td>';
-    h += '</tr>';
+    h += '<td class="num"><b>' + n(s.total) + '</b></td></tr>';
   });
 
   h += '</tbody></table></section>';
-  h += '<p class="sect__note" style="margin-top:12px">综合得分 ＝ 人效段 ＋ 非油段 ＋ 检查段 − 投诉扣分 ＋ 进步加分。' +
-    '触发一票否决的站当期记 0 分并置末位。</p>';
+  h += '<p class="sect__note" style="margin-top:12px">综合 ＝ 油品45 ＋ 非油10 ＋ 人效15 ＋ 管理30 − 投诉 ＋ 进步，' +
+    '封顶 120。不设等级；同分时油品段高者排前；触发一票否决的站置末位。</p>';
 
   document.getElementById('app').innerHTML = h;
 }

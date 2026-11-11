@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050a10">
+<title>运营管理 · 综合考核工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar__eyebrow">OPERATION CONTROL</div>
+  <div class="appbar__row">
+    <div style="min-width:0">
+      <h1 class="appbar__title">运营管理</h1>
+      <div class="appbar__sub" id="subInfo">停业 / 复营 / 不可抗力指令签发</div>
+    </div>
+    <button class="theme-btn" id="themeBtn" aria-label="切换主题"></button>
+  </div>
+</header>
+
+<main class="screen">
+
+  <!-- 未解锁 -->
+  <section class="card" id="lockCard" style="margin-top:16px">
+    <div class="sect__head" style="margin-bottom:10px">
+      <span class="sect__title">管理员验证</span><span class="sect__hint">仅限计划经营科</span>
+    </div>
+    <div class="field">
+      <label>管理口令</label>
+      <input type="password" id="pass" placeholder="输入管理口令" autocomplete="off">
+    </div>
+    <button class="btn btn--primary btn--block" id="btnUnlock" style="margin-top:14px">解锁</button>
+    <p class="hint" style="margin-top:12px">
+      口令只用于打开本页的签发界面。签发后生成的是<b>变更单</b>，须由科室执行推送脚本才会写入台账、影响榜单——网页本身不能改云端数据。
+    </p>
+  </section>
+
+  <!-- 已解锁 -->
+  <div id="panel" style="display:none">
+
+    <section class="card">
+      <div class="sect__head" style="margin-bottom:10px">
+        <span class="sect__title">签发指令</span><span class="sect__hint" id="whoTag"></span>
+      </div>
+
+      <div class="field"><label>油站</label><select id="fStation"></select></div>
+
+      <div class="field"><label>状态类型</label><select id="fStatus">
+        <option value="temp_closed">临时关停（当月不出分、不排名）</option>
+        <option value="partial">部分停业（按实际经营天数折算）</option>
+        <option value="force_majeure">不可抗力（剔除受影响天数）</option>
+        <option value="reopened">复营（次月重新入榜）</option>
+        <option value="normal">恢复正常营业</option>
+      </select></div>
+
+      <div class="field"><label>起始日期</label><input type="date" id="fFrom"></div>
+      <div class="field"><label>结束日期（留空＝持续有效，复营时再下指令关闭）</label><input type="date" id="fTo"></div>
+      <div class="field" id="daysField"><label>当月实际经营天数（部分停业／不可抗力时填）</label><input type="text" id="fDays" inputmode="numeric" placeholder="如 22"></div>
+      <div class="field"><label>原因 / 依据</label><input type="text" id="fReason" placeholder="如 站区改造临时关停"></div>
+      <div class="field"><label>佐证材料说明</label><input type="text" id="fEvidence" placeholder="如 公司停业通知 / 封路公告编号"></div>
+      <div class="field"><label>签发人</label><input type="text" id="fOperator" placeholder="姓名或岗位"></div>
+
+      <button class="btn btn--primary btn--block" id="btnIssue" style="margin-top:16px">生成变更单</button>
+      <p class="hint" style="margin-top:10px">同一站点后签发的指令自动覆盖此前状态；历史记录完整保留，可追溯。</p>
+    </section>
+
+    <div id="preview"></div>
+
+    <div class="sect__head" style="margin-top:22px">
+      <span class="sect__title">当前台账</span><span class="sect__hint" id="cnt"></span>
+    </div>
+    <div id="ledger"></div>
+
+    <div class="sect__head" style="margin-top:22px"><span class="sect__title">生效规则</span></div>
+    <section class="card">
+      <div class="kv"><span>临时关停</span><b>当月不出分、不参与排名，榜单标注「停业」</b></div>
+      <div class="kv"><span>年度兑现</span><b>按实际经营月份加权平均</b></div>
+      <div class="kv"><span>现场管理段</span><b>停业期不外推、不计 0 分</b></div>
+      <div class="kv"><span>复营</span><b>次月重新入榜，停业期不补算、不沿用</b></div>
+      <div class="kv kv--total"><span>生效方式</span><b>变更单 → 科室执行推送脚本</b></div>
+    </section>
+
+    <div class="warn" style="margin-top:14px">
+      本页的管理口令写在前端代码里，只防误操作、不防有心人。真正的安全边界是最后那一步——<b>变更单必须科室人工确认并推送</b>。任何人在网页上点「生成」都不会直接改榜单。
+    </div>
+  </div>
+
+</main>
+
+<nav id="tabbar"></nav>
+
+<script src="assets/ui.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/status.js"></script>
+<script>
+UI.tabbar('');
+
+/* 管理口令：仅 UI 锁。真正生效需科室推送变更单。 */
+var ADMIN_PASS = 'KH-ADMIN-2027';
+var UNLOCK_KEY = 'kaohe-admin-unlocked';
+
+var STATIONS = CFG.stations;
+var sel = document.getElementById('fStation');
+STATIONS.forEach(function (s) {
+  var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+});
+
+var today = new Date();
+function iso(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+document.getElementById('fFrom').value = iso(today);
+document.getElementById('fOperator').value = localStorage.getItem('lastOperator') || '';
+
+function showPanel() {
+  document.getElementById('lockCard').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+  document.getElementById('whoTag').textContent = '已解锁';
+  renderLedger();
+}
+
+document.getElementById('btnUnlock').addEventListener('click', function () {
+  var v = document.getElementById('pass').value.trim();
+  if (v !== ADMIN_PASS) { UI.toast('口令不正确'); return; }
+  sessionStorage.setItem(UNLOCK_KEY, '1');
+  showPanel();
+});
+document.getElementById('pass').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('btnUnlock').click();
+});
+if (sessionStorage.getItem(UNLOCK_KEY) === '1') showPanel();
+
+document.getElementById('fStatus').addEventListener('change', function () {
+  document.getElementById('daysField').style.display =
+    (this.value === 'partial' || this.value === 'force_majeure') ? 'block' : 'none';
+});
+
+function two(n) { return (n < 10 ? '0' : '') + n; }
+
+function makeId() {
+  var d = new Date();
+  return 'ST-' + d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()) +
+    '-' + two(d.getHours()) + two(d.getMinutes()) + two(d.getSeconds());
+}
+
+document.getElementById('btnIssue').addEventListener('click', function () {
+  var station = sel.value;
+  var status = document.getElementById('fStatus').value;
+  var from = document.getElementById('fFrom').value;
+  var to = document.getElementById('fTo').value;
+  var reason = document.getElementById('fReason').value.trim();
+  var evidence = document.getElementById('fEvidence').value.trim();
+  var operator = document.getElementById('fOperator').value.trim();
+  var daysRaw = document.getElementById('fDays').value.trim();
+
+  var problems = [];
+  if (!station) problems.push('未选择油站');
+  if (!from) problems.push('未填起始日期');
+  if (!reason) problems.push('未填原因／依据');
+  if (!operator) problems.push('未填签发人');
+  if (to && to < from) problems.push('结束日期早于起始日期');
+  if ((status === 'partial' || status === 'force_majeure') && !daysRaw) {
+    problems.push('部分停业／不可抗力需填当月实际经营天数');
+  }
+  if (problems.length) {
+    document.getElementById('preview').innerHTML = '<div class="err">' + problems.map(UI.esc).join('<br>') + '</div>';
+    return;
+  }
+
+  var d = new Date();
+  var rec = {
+    id: makeId(),
+    station: station,
+    status: status,
+    from: from,
+    to: to || null,
+    reason: reason,
+    affectedDays: daysRaw !== '' ? Number(daysRaw) : null,
+    operator: operator,
+    setAt: d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' +
+           two(d.getHours()) + ':' + two(d.getMinutes()),
+    evidence: evidence,
+    active: true
+  };
+  localStorage.setItem('lastOperator', operator);
+
+  var t = Status.typeOf(status) || { label: status, desc: '' };
+  var h = '<div class="sect__head" style="margin-top:22px"><span class="sect__title">变更单已生成</span>' +
+    '<span class="sect__hint">' + UI.esc(rec.id) + '</span></div><section class="card">';
+  h += '<div class="kv"><span>油站</span><b>' + UI.esc(station) + '</b></div>';
+  h += '<div class="kv"><span>状态</span><b>' + UI.esc(t.label) + '</b></div>';
+  h += '<div class="kv"><span>期间</span><b>' + UI.esc(from) + ' 起' + (to ? ' 至 ' + UI.esc(to) : '（持续）') + '</b></div>';
+  h += '<div class="kv"><span>原因</span><b>' + UI.esc(reason) + '</b></div>';
+  h += '<div class="kv"><span>签发人</span><b>' + UI.esc(operator) + '</b></div>';
+  h += '<div class="kv kv--total"><span>生效</span><b>待科室推送</b></div>';
+  h += '</section>';
+  h += '<div class="card"><div class="hint" style="margin-bottom:10px">' + UI.esc(t.desc) + '</div>';
+  h += '<button class="btn btn--primary btn--block" id="btnDownload">下载变更单</button>';
+  h += '<p class="hint" style="margin-top:10px">下载后把文件放进 <b>D:\\加油站综合考核系统\\inbox\\status\\</b>，' +
+    '科室双击运行 <b>status_push.bat</b> 即自动合并并推送。也可直接把文件发给我，我来推。</p></div>';
+  document.getElementById('preview').innerHTML = h;
+
+  document.getElementById('btnDownload').addEventListener('click', function () {
+    var blob = new Blob([JSON.stringify(rec, null, 2)], { type: 'application/json;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = rec.id + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    UI.toast('已下载：' + rec.id + '.json');
+  });
+});
+
+Status.load().then(function () { if (document.getElementById('panel').style.display !== 'none') renderLedger(); });
+
+function renderLedger() {
+  var box = document.getElementById('ledger');
+  var list = Status.all();
+  document.getElementById('cnt').textContent = list.length + ' 条';
+  if (!list.length) { box.innerHTML = '<div class="card"><div class="hint">台账为空。</div></div>'; return; }
+  var h = '';
+  list.forEach(function (r) {
+    var t = Status.typeOf(r.status) || { label: r.status };
+    h += '<section class="card">';
+    h += '<div class="kv"><span>油站</span><b>' + UI.esc(r.station) + '</b></div>';
+    h += '<div class="kv"><span>状态</span><b><span class="tag' +
+      (r.status === 'temp_closed' ? ' no' : ' ok') + '">' + UI.esc(t.label) + '</span></b></div>';
+    h += '<div class="kv"><span>期间</span><b>' + UI.esc(r.from || '') + ' 起' +
+      (r.to ? ' 至 ' + UI.esc(r.to) : '（持续）') + '</b></div>';
+    h += '<div class="kv"><span>原因</span><b>' + UI.esc(r.reason || '') + '</b></div>';
+    h += '<div class="kv"><span>签发</span><b>' + UI.esc(r.operator || '') + ' · ' + UI.esc(r.setAt || '') + '</b></div>';
+    h += '<div class="kv"><span>编号</span><b>' + UI.esc(r.id || '') + '</b></div>';
+    h += '</section>';
+  });
+  box.innerHTML = h;
+}
+</script>
+</body>
+</html>

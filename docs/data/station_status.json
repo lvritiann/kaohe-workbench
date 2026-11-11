@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-11-11 20:24",
+  "issuer": "计划经营科",
+  "note": "运营状态指令台账。变更单由管理员在「运营管理」页签发，经科室执行 tools/status_push.py 推送后生效。网页端只读本文件，不能直接改榜单。",
+  "statusTypes": {
+    "normal":        { "label": "正常营业", "exclude": false, "desc": "正常参与当月评分与排名" },
+    "temp_closed":   { "label": "临时关停", "exclude": true,  "desc": "当月不出分、不参与排名，榜单标注「停业」；年度按实际经营月份加权" },
+    "partial":       { "label": "部分停业", "exclude": false, "desc": "半幅施工、限时营业等，按实际经营天数等比例折算任务与指标" },
+    "force_majeure": { "label": "不可抗力", "exclude": false, "desc": "封路、灾害等，剔除受影响天数后按实际经营天数折算" },
+    "reopened":      { "label": "复营",     "exclude": false, "desc": "次月重新入榜，停业期不补算、不沿用" }
+  },
+  "rules": {
+    "closed": "停业当月不出分、不参与排名；年度得分按实际经营月份加权平均；现场管理段不外推、不计 0 分。",
+    "partial": "受影响天数从当月考核天数中剔除，任务按实际经营天数等比例折算；需附佐证材料并经科室审批。",
+    "reopen": "复营后次月重新入榜，停业期不补算、不沿用。"
+  },
+  "records": [
+    {
+      "id": "ST-20261101-HS-001",
+      "station": "华山",
+      "status": "temp_closed",
+      "from": "2026-11-01",
+      "to": null,
+      "reason": "临时关停（12 月是否恢复营业另行明确）",
+      "affectedDays": null,
+      "operator": "计划经营科",
+      "setAt": "2026-11-11 20:24",
+      "evidence": "《目标责任考核方案》V1.0 第十一章（二）现行适用",
+      "active": true
+    }
+  ]
+}
