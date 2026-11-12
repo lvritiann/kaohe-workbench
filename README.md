@@ -119,6 +119,9 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 8. **换打分人 / 改题目**：改对应 JSON → 推 GitHub → 升 sw 版本 → 页面强刷。
 9. **离线**：首次联网打开后自动缓存；断网可打分可导出，照片只存本地草稿。
 10. **停业站仍出现在榜上**：检查 `station_status.json` 的 `from`/`active` 与 `status.html` 签发的变更单是否已推送。
+11. **`git push` 卡住 / SIGTERM**：代理环境下 HTTP/2 大包会挂起。改用「显式令牌 + HTTP/1.1」（令牌只从 `.gh_token.txt` 读，不写入 git 配置）：
+    `python -c "import subprocess;t=open('.gh_token.txt',encoding='utf-8').read().strip();subprocess.run(['git','-c','http.version=HTTP/1.1','-c','http.postBuffer=5242880','push','https://x-access-token:'+t+'@github.com/lvritiann/kaohe-workbench.git','main'])"`
+    验证：看 GitHub 仓库最新提交 SHA 是否等于本地 `git rev-parse --short HEAD`。若 `git ls-remote` 报 `schannel: server closed abruptly`，只是网络抖动，用 API 查 `branches/main` 确认即可，不要盲目重推。
 
 ## 九、口径红线
 
