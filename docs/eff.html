@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050a10">
+<title>人效看板 · 目标责任考核</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .kpi { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:14px; }
+  .kpi .card { margin:0; padding:13px 14px; }
+  .kpi__v { font-size:25px; font-weight:750; letter-spacing:-.5px; line-height:1.25;
+            font-variant-numeric:tabular-nums; color:var(--accent); }
+  .kpi__v.alt { color:var(--text); }
+  .kpi__k { font-size:11px; color:var(--text-3); letter-spacing:.4px; }
+  .kpi__s { font-size:11px; color:var(--text-3); margin-top:4px; }
+  .bar { margin:11px 0; }
+  .bar__top { display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+              font-size:13px; margin-bottom:5px; }
+  .bar__top b { font-variant-numeric:tabular-nums; font-size:13px; }
+  .bar__track { height:8px; border-radius:6px; background:var(--surface-hi); overflow:hidden; }
+  .bar__fill { height:100%; border-radius:6px;
+               background:linear-gradient(90deg, var(--brand-dim), var(--accent)); }
+  .bar.off .bar__fill { background:var(--slate-500); }
+  .tbl-mini { width:100%; border-collapse:collapse; font-size:12px; }
+  .tbl-mini td { padding:7px 4px; border-bottom:1px solid var(--line); }
+  .tbl-mini td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar__eyebrow">EFFICIENCY MONITOR · V1.0</div>
+  <div class="appbar__row">
+    <div>
+      <h1 class="appbar__title">人效看板</h1>
+      <div class="appbar__sub" id="sub">加载中…</div>
+    </div>
+    <button class="theme-btn" id="themeBtn" aria-label="切换主题"></button>
+  </div>
+</header>
+
+<main class="screen" id="app"></main>
+
+<nav id="tabbar"></nav>
+
+<script src="assets/ui.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/status.js"></script>
+<script>
+UI.tabbar('eff');
+
+var D = null;
+var CUR = '';
+
+Promise.all([
+  fetch('data/efficiency.json', { cache: 'no-cache' }).then(function (r) {
+    if (!r.ok) throw new Error('no eff'); return r.json();
+  }),
+  Status.load()
+]).then(function (a) { D = a[0]; boot(); })
+  .catch(function () { renderFail(); });
+
+function f(v, n) { return (v == null || isNaN(v)) ? '—' : Number(v).toFixed(n == null ? 2 : n); }
+function esc(s) { return UI.esc(s); }
+
+function boot() {
+  document.getElementById('sub').textContent =
+    (D.month || '') + ' · ' + f(D.company && D.company.avgEff) + ' 平均人效 · 更新 ' + (D.updatedAt || '—');
+
+  var names = (D.stations || []).map(function (x) { return x.name; });
+  var saved = localStorage.getItem('kaohe-eff-station');
+  CUR = (saved && names.indexOf(saved) >= 0) ? saved : (names[0] || '');
+  render();
+}
+
+function renderFail() {
+  document.getElementById('app').innerHTML =
+    '<div class="card" style="margin-top:16px"><div class="sect__head">' +
+    '<span class="sect__title">人效数据未就绪</span></div>' +
+    '<div class="hint">缺少 <b>data/efficiency.json</b>。由金山日报 AirScript 每日推送，' +
+    '或科室运行 <b>python tools/build_efficiency.py --month YYYY-MM</b> 本地生成。</div></div>';
+}
+
+function render() {
+  var P = D.period || {}, C = D.company || {}, rows = (D.stations || []).slice()
+    .sort(function (a, b) { return a.rank - b.rank; });
+  var maxEff = C.maxEff || 1;
+  var h = '';
+
+  if (D.dataMode === 'baseline') {
+    h += '<div class="card" style="margin-top:16px;border-color:var(--no)">' +
+      '<div class="sect__head"><span class="sect__title">基准值 · 非实时</span>' +
+      '<span class="sect__hint">口径演示</span></div>' +
+      '<div class="hint">当前为定稿附录B 日均基准 × 会计月天数，<b>不是当日实际数</b>。' +
+      '接入金山日报后由 AirScript 每日覆盖，此处自动变为实时人效。正式考核以推送数据为准。</div></div>';
+  }
+
+  /* 会计月 */
+  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">会计月</span>' +
+    '<span class="sect__hint">' + esc(D.month || '') + '</span></div>';
+  h += '<section class="card">' +
+    '<div class="kv"><span>区间</span><b>' + esc(P.start || '') + ' — ' + esc(P.end || '') + '</b></div>' +
+    '<div class="kv"><span>天数</span><b>' + f(P.days, 0) + ' 天' +
+      (P.elapsed ? '（已过 ' + f(P.elapsed, 0) + ' 天）' : '') + '</b></div>' +
+    '<div class="kv"><span>数据来源</span><b>' + esc(D.source || '') + '</b></div>' +
+    '<div class="kv"><span>更新时间</span><b>' + esc(D.updatedAt || '') + '</b></div>' +
+    '</section>';
+
+  /* 公司 KPI */
+  h += '<div class="kpi">' +
+    kpi('公司平均人效', f(C.avgEff), '基准 65 · 定稿 65.15') +
+    kpi('最高站人效', f(C.maxEff), topName(rows, 1)) +
+    kpi('最低站人效', f(C.minEff), topName(rows, -1), true) +
+    kpi('参评站数', f(C.count, 0), '停业站不出分、不排名', true) +
+    '</div>';
+
+  /* 选站 */
+  h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">单站明细</span>' +
+    '<span class="sect__hint">点开看自己怎么算</span></div>';
+  h += '<section class="card"><div class="field"><label>选择油站</label><select id="selSt">' +
+    (D.stations || []).map(function (x) {
+      return '<option value="' + esc(x.name) + '"' + (x.name === CUR ? ' selected' : '') + '>' +
+        esc(x.name) + '</option>';
+    }).join('') + '</select></div>' + detail(rows.filter(function (x) { return x.name === CUR; })[0]) + '</section>';
+
+  /* 15 站排行 */
+  h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">15 站人效排序</span>' +
+    '<span class="sect__hint">条长＝相对最高站</span></div>';
+  h += '<section class="card">';
+  rows.forEach(function (s) {
+    var off = Status.excluded(s.name, (D.month || '').slice(0, 7));
+    h += '<div class="bar' + (off ? ' off' : '') + '">' +
+      '<div class="bar__top"><span>' + pad2(s.rank) + ' <b>' + esc(s.name) + '</b>' +
+      (off ? ' <span class="tag na">停业</span>' : '') + '</span>' +
+      '<span><b>' + f(s.monthEff) + '</b> <span style="color:var(--text-3)">· 段分 ' +
+      f(s.effScore) + '</span></span></div>' +
+      '<div class="bar__track"><div class="bar__fill" style="width:' +
+      Math.max(2, Math.min(100, s.monthEff / maxEff * 100)).toFixed(1) + '%"></div></div></div>';
+  });
+  h += '</section>';
+
+  /* 历史趋势 */
+  h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">历史人效</span>' +
+    '<span class="sect__hint">逐月留痕</span></div>';
+  h += trend(D.history || [], CUR);
+
+  /* 口径 */
+  h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">口径</span></div>';
+  h += '<section class="card">' +
+    '<div class="kv"><span>当量 SGE</span><b>汽油×56 ＋ 柴油×28（吨）</b></div>' +
+    '<div class="kv"><span>人效</span><b>(月当量 ÷ 天数) ÷ (月均在岗 − 4)</b></div>' +
+    '<div class="kv"><span>月均在岗</span><b>各日在岗之和 ÷ 会计月天数</b></div>' +
+    '<div class="kv"><span>人效段</span><b>人效 ÷ 65 × 15，封顶 25</b></div>' +
+    '<div class="kv"><span>会计月</span><b>上月 26 日 — 本月 25 日</b></div>' +
+    '</section>';
+  h += '<p class="sect__note" style="margin-top:12px">V5 不设等级，只按综合得分出 1–15 名。' +
+    '本页人效仅为五段中的第三段，完整得分与排名请到「排名榜」查看。</p>';
+
+  document.getElementById('app').innerHTML = h;
+  var sel = document.getElementById('selSt');
+  if (sel) sel.addEventListener('change', function () {
+    CUR = sel.value;
+    localStorage.setItem('kaohe-eff-station', CUR);
+    render();
+    document.getElementById('selSt').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+}
+
+function kpi(k, v, s, alt) {
+  return '<div class="card"><div class="kpi__k">' + k + '</div>' +
+    '<div class="kpi__v' + (alt ? ' alt' : '') + '">' + v + '</div>' +
+    '<div class="kpi__s">' + esc(s || '') + '</div></div>';
+}
+
+function topName(rows, dir) {
+  if (!rows.length) return '';
+  var s = dir > 0 ? rows[0] : rows[rows.length - 1];
+  return s ? s.name : '';
+}
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+function detail(s) {
+  if (!s) return '<div class="hint">暂无该站数据</div>';
+  var h = '<table class="tbl-mini" style="margin-top:10px">';
+  var kv = [
+    ['会计月累计汽油', f(s.monthGas) + ' 吨'],
+    ['会计月累计柴油', f(s.monthDiesel) + ' 吨'],
+    ['会计月累计当量', f(s.monthSge) + ' SGE'],
+    ['日均当量', f(s.daySge) + ' SGE/天'],
+    ['月均在岗', f(s.monthlyHead) + ' 人'],
+    ['分母（−4）', f(s.denom) + ' 人'],
+    ['月均人效', f(s.monthEff) + ' SGE/人·天'],
+    ['相对基准 65', f(s.multiple, 3) + ' 倍'],
+    ['人效段得分', f(s.effScore) + ' / 25 分'],
+    ['人效排名', '第 ' + f(s.rank, 0) + ' 名']
+  ];
+  kv.forEach(function (x) {
+    h += '<tr><td style="color:var(--text-3)">' + x[0] + '</td><td><b>' + x[1] + '</b></td></tr>';
+  });
+  h += '</table>';
+  if (s.today) {
+    h += '<p class="hint" style="margin-top:10px">当日参考：汽油 ' + f(s.today.gasTon) +
+      ' 吨 / 柴油 ' + f(s.today.dieselTon) + ' 吨。<b>' + esc(s.today.note || '') + '</b></p>';
+  }
+  return h;
+}
+
+function trend(H, name) {
+  if (!H.length) {
+    return '<section class="card"><div class="hint">暂无历史台账。每月核算后由 ' +
+      'tools/build_efficiency.py 自动留痕一期。</div></section>';
+  }
+  var h = '<section class="card">';
+  h += '<table class="tbl-mini"><thead><tr><td style="color:var(--text-3)">月份</td>' +
+    '<td style="color:var(--text-3);text-align:right">公司平均</td>' +
+    '<td style="color:var(--text-3);text-align:right">' + esc(name) + '</td></tr></thead><tbody>';
+  H.slice().reverse().forEach(function (x) {
+    var v = (x.stations && x.stations[name] != null) ? f(x.stations[name]) : '—';
+    h += '<tr><td>' + esc(x.month) + (x.dataMode === 'baseline' ? ' <span class="tag na">基准</span>' : '') +
+      '</td><td><b>' + f(x.avgEff) + '</b></td><td><b>' + v + '</b></td></tr>';
+  });
+  h += '</tbody></table>';
+
+  if (H.length < 2) {
+    h += '<p class="hint" style="margin-top:10px">已有 1 期；积累 2 期后自动绘制趋势折线。</p></section>';
+    return h;
+  }
+
+  var W = 320, HH = 128, L = 30, R = 12, T = 14, B = 24;
+  var n = H.length;
+  var all = [];
+  H.forEach(function (x) {
+    all.push(Number(x.avgEff) || 0);
+    if (x.stations && x.stations[name] != null) all.push(Number(x.stations[name]) || 0);
+  });
+  var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+  if (hi - lo < 1) { hi += 1; lo -= 1; }
+  var pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+
+  function X(i) { return L + i * (W - L - R) / (n - 1); }
+  function Y(v) { return T + (hi - v) / (hi - lo) * (HH - T - B); }
+
+  var p1 = H.map(function (x, i) { return X(i).toFixed(1) + ',' + Y(x.avgEff).toFixed(1); }).join(' ');
+  var p2 = H.map(function (x, i) {
+    var v = (x.stations && x.stations[name] != null) ? x.stations[name] : x.avgEff;
+    return X(i).toFixed(1) + ',' + Y(v).toFixed(1);
+  }).join(' ');
+
+  h += '<svg viewBox="0 0 ' + W + ' ' + HH + '" style="width:100%;height:auto;margin-top:12px;overflow:visible">';
+  [0, 0.5, 1].forEach(function (t) {
+    var y = T + t * (HH - T - B);
+    h += '<line x1="' + L + '" y1="' + y + '" x2="' + (W - R) + '" y2="' + y +
+      '" style="stroke:var(--line)" stroke-width="1"/>';
+    h += '<text x="2" y="' + (y + 3) + '" font-size="9" style="fill:var(--text-3)">' +
+      (hi - t * (hi - lo)).toFixed(0) + '</text>';
+  });
+  H.forEach(function (x, i) {
+    h += '<text x="' + X(i) + '" y="' + (HH - 4) + '" font-size="9" text-anchor="middle" ' +
+      'style="fill:var(--text-3)">' + esc(String(x.month).slice(5)) + '</text>';
+  });
+  h += '<polyline points="' + p1 + '" fill="none" stroke-width="2" style="stroke:var(--accent-2)" ' +
+    'stroke-linejoin="round" stroke-linecap="round"/>';
+  h += '<polyline points="' + p2 + '" fill="none" stroke-width="2.4" style="stroke:var(--accent)" ' +
+    'stroke-linejoin="round" stroke-linecap="round"/>';
+  H.forEach(function (x, i) {
+    var v = (x.stations && x.stations[name] != null) ? x.stations[name] : x.avgEff;
+    h += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" ' +
+      'style="fill:var(--accent)"/>';
+  });
+  h += '</svg>';
+  h += '<p class="hint" style="margin-top:8px"><span style="color:var(--accent)">━</span> ' +
+    esc(name) + '　<span style="color:var(--accent-2)">━</span> 公司平均（SGE/人·天）</p>';
+  h += '</section>';
+  return h;
+}
+</script>
+</body>
+</html>

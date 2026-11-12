@@ -109,8 +109,11 @@ window.Engine = (function () {
   }
 
   function composite(p) {
-    return r((p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0) + (p.inspectScore || 0) + (p.mysteryScore || 0)
-      - (p.complaint || 0) + (p.progress || 0), 2);
+    var sum = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0)
+      + (p.inspectScore || 0) + (p.mysteryScore || 0)
+      - (p.complaint || 0) + (p.progress || 0);
+    /* 定稿：综合封顶 120；投诉扣分不设下限，故不夹下界 */
+    return r(Math.min(sum, C.totalCap || 120), 2);
   }
 
   function rank(rows) {

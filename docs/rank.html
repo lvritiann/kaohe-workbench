@@ -83,6 +83,14 @@ function render(d) {
 
   var h = '';
 
+  if (d && d.dataMode === 'demo') {
+    h += '<div class="card" style="margin-top:16px;border-color:var(--warn,#d89b2b)">' +
+      '<div class="sect__head"><span class="sect__title">示例数据</span>' +
+      '<span class="sect__hint">非正式发榜</span></div>' +
+      '<div class="hint">油品／非油／神访为演示填值，人效段取自定稿附录B。' +
+      '科室核算后用 <b>tools/build_rank.py</b> 覆盖 data/rank.json 即为正式榜。</div></div>';
+  }
+
   if (closed.length) {
     h += '<div class="sect__head" style="margin-top:18px"><span class="sect__title">停业站</span>' +
       '<span class="sect__hint">不出分 · 不参与排名</span></div>';
@@ -122,10 +130,10 @@ function render(d) {
   }
 
   h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">全部排名</span>' +
-    '<span class="sect__hint">' + active.length + ' 站</span></div>';
-  h += '<section class="card card--flush" style="padding:12px 14px 4px"><table class="tbl"><thead><tr>' +
+    '<span class="sect__hint">' + active.length + ' 站 · 五段拆解</span></div>';
+  h += '<section class="card card--flush" style="padding:12px 14px 4px;overflow-x:auto"><table class="tbl"><thead><tr>' +
     '<th style="width:28px">#</th><th>油站</th><th class="num">油品</th><th class="num">非油</th>' +
-    '<th class="num">人效</th><th class="num">管理</th><th class="num">综合</th>' +
+    '<th class="num">人效</th><th class="num">运营</th><th class="num">神访</th><th class="num">综合</th>' +
     '</tr></thead><tbody>';
 
   active.forEach(function (s, i) {
@@ -139,6 +147,7 @@ function render(d) {
     h += '<td class="num">' + n(s.nonoilScore) + '</td>';
     h += '<td class="num">' + n(s.effScore) + '</td>';
     h += '<td class="num">' + n(s.inspectScore) + '</td>';
+    h += '<td class="num">' + n(s.mysteryScore) + '</td>';
     h += '<td class="num"><b>' + n(s.total) + '</b></td></tr>';
   });
 

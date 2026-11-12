@@ -1,387 +1,388 @@
 {
- "version": "1.1",
+ "version": "V5",
+ "month": "2026-11",
  "date": "2026-11-12",
- "updatedAt": "2026-11-12 09:02",
- "basis": "SGE ÷（当班人数 − 4）；SGE = 汽油×55.65 + 柴油×28.80；基准 65.26",
- "source": "2026xx销售及库存日报（新）· 人效 / 销售日报",
- "benchmark": 65.26,
- "baseHead": 4,
- "maxEff": 140.23,
+ "updatedAt": "2026-11-12 21:08",
+ "dataMode": "baseline",
+ "source": "《目标责任考核方案》V1.0 附录B 表18（定稿日均基准）",
+ "basis": "人效 = (会计月当量 ÷ 会计月天数) ÷ (月均在岗 − 4)；当量 = 汽油×56 + 柴油×28；人效段 = 人效 ÷ 65 × 15，封顶 25",
+ "note": "接入金山日报后由 tools/airscript/eff_push.js 每日覆盖；也可用本脚本本地生成。baseline 仅作口径演示，不作为正式考核发榜依据。",
+ "period": {
+  "start": "2026-10-26",
+  "end": "2026-11-25",
+  "days": 31,
+  "elapsed": 0
+ },
+ "params": {
+  "sgeGas": 56,
+  "sgeDiesel": 28,
+  "baseHead": 4,
+  "benchmark": 65,
+  "effBase": 15,
+  "effCap": 25
+ },
+ "company": {
+  "avgEff": 65.15,
+  "maxEff": 95.18,
+  "minEff": 21.91,
+  "count": 15
+ },
  "stations": [
   {
-   "name": "秦岭",
-   "gasTon": 16.8431,
-   "dieselTon": 5.209,
-   "totalTon": 22.0521,
-   "head": 27,
-   "denom": 23,
-   "sge": 1087.34,
-   "eff": 47.28,
-   "rate": 0.7244,
-   "grade": "不合格",
-   "rawEff": 0.8167,
-   "month": {
-    "tons": 22.05,
-    "head": 27,
-    "rawEff": 0.8167
+   "name": "华山",
+   "monthlyHead": 30.0,
+   "denom": 26.0,
+   "days": 31,
+   "monthGas": 743.38,
+   "monthDiesel": 1253.02,
+   "monthTons": 1996.4,
+   "monthSge": 76713.84,
+   "daySge": 2474.64,
+   "monthEff": 95.18,
+   "multiple": 1.4643,
+   "effScore": 21.96,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 23.98,
+    "dieselTon": 40.42,
+    "eff": 95.18,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 9525.77,
-    "head": 27,
-    "rawEff": 352.8062
-   },
-   "effSeg": 16.86,
-   "rank": 12
-  },
-  {
-   "name": "宁陕",
-   "gasTon": 11.5381,
-   "dieselTon": 3.2864,
-   "totalTon": 14.8244,
-   "head": 17,
-   "denom": 13,
-   "sge": 736.74,
-   "eff": 56.67,
-   "rate": 0.8684,
-   "grade": "待改进",
-   "rawEff": 0.872,
-   "month": {
-    "tons": 14.82,
-    "head": 17,
-    "rawEff": 0.872
-   },
-   "year": {
-    "tons": 6840.66,
-    "head": 17,
-    "rawEff": 402.3916
-   },
-   "effSeg": 20.21,
-   "rank": 10
-  },
-  {
-   "name": "洋县",
-   "gasTon": 8.6029,
-   "dieselTon": 12.597,
-   "totalTon": 21.1999,
-   "head": 20,
-   "denom": 16,
-   "sge": 841.55,
-   "eff": 52.6,
-   "rate": 0.806,
-   "grade": "待改进",
-   "rawEff": 1.06,
-   "month": {
-    "tons": 21.2,
-    "head": 20,
-    "rawEff": 1.06
-   },
-   "year": {
-    "tons": 6068.84,
-    "head": 20,
-    "rawEff": 303.442
-   },
-   "effSeg": 18.75,
-   "rank": 11
-  },
-  {
-   "name": "汉中",
-   "gasTon": 10.3114,
-   "dieselTon": 14.055,
-   "totalTon": 24.3664,
-   "head": 15,
-   "denom": 11,
-   "sge": 978.61,
-   "eff": 88.96,
-   "rate": 1.3632,
-   "grade": "优秀",
-   "rawEff": 1.6244,
-   "month": {
-    "tons": 24.37,
-    "head": 15,
-    "rawEff": 1.6244
-   },
-   "year": {
-    "tons": 7081,
-    "head": 15,
-    "rawEff": 472.0668
-   },
-   "effSeg": 31.72,
-   "rank": 8
-  },
-  {
-   "name": "富平",
-   "gasTon": 19.1588,
-   "dieselTon": 45.757,
-   "totalTon": 64.9158,
-   "head": 21,
-   "denom": 17,
-   "sge": 2383.99,
-   "eff": 140.23,
-   "rate": 2.1489,
-   "grade": "优秀",
-   "rawEff": 3.0912,
-   "month": {
-    "tons": 64.92,
-    "head": 21,
-    "rawEff": 3.0912
-   },
-   "year": {
-    "tons": 9992.52,
-    "head": 21,
-    "rawEff": 475.8344
-   },
-   "effSeg": 50,
    "rank": 1
   },
   {
-   "name": "韩城",
-   "gasTon": 10.9291,
-   "dieselTon": 24.743,
-   "totalTon": 35.6721,
-   "head": 17,
-   "denom": 13,
-   "sge": 1320.8,
-   "eff": 101.6,
-   "rate": 1.5569,
-   "grade": "优秀",
-   "rawEff": 2.0984,
-   "month": {
-    "tons": 35.67,
-    "head": 17,
-    "rawEff": 2.0984
+   "name": "汉中",
+   "monthlyHead": 14.0,
+   "denom": 10.0,
+   "days": 31,
+   "monthGas": 432.45,
+   "monthDiesel": 178.25,
+   "monthTons": 610.7,
+   "monthSge": 29208.2,
+   "daySge": 942.2,
+   "monthEff": 94.22,
+   "multiple": 1.4495,
+   "effScore": 21.74,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 13.95,
+    "dieselTon": 5.75,
+    "eff": 94.22,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 7212.87,
-    "head": 17,
-    "rawEff": 424.2864
-   },
-   "effSeg": 36.23,
-   "rank": 6
-  },
-  {
-   "name": "富县",
-   "gasTon": 5.5499,
-   "dieselTon": 1.623,
-   "totalTon": 7.1728,
-   "head": 12,
-   "denom": 8,
-   "sge": 355.59,
-   "eff": 44.45,
-   "rate": 0.6811,
-   "grade": "不合格",
-   "rawEff": 0.5977,
-   "month": {
-    "tons": 7.17,
-    "head": 12,
-    "rawEff": 0.5977
-   },
-   "year": {
-    "tons": 1671.91,
-    "head": 12,
-    "rawEff": 139.3257
-   },
-   "effSeg": 15.85,
-   "rank": 13
-  },
-  {
-   "name": "南沙",
-   "gasTon": 2.451,
-   "dieselTon": 46.3423,
-   "totalTon": 48.7933,
-   "head": 15,
-   "denom": 11,
-   "sge": 1471.06,
-   "eff": 133.73,
-   "rate": 2.0492,
-   "grade": "优秀",
-   "rawEff": 3.2529,
-   "month": {
-    "tons": 48.79,
-    "head": 15,
-    "rawEff": 3.2529
-   },
-   "year": {
-    "tons": 9508.16,
-    "head": 15,
-    "rawEff": 633.8772
-   },
-   "effSeg": 47.68,
    "rank": 2
   },
   {
-   "name": "华山",
-   "gasTon": 13.4058,
-   "dieselTon": 68.1685,
-   "totalTon": 81.5744,
-   "head": 27,
-   "denom": 23,
-   "sge": 2709.29,
-   "eff": 117.8,
-   "rate": 1.805,
-   "grade": "优秀",
-   "rawEff": 3.0213,
-   "month": {
-    "tons": 81.57,
-    "head": 27,
-    "rawEff": 3.0213
+   "name": "宁陕",
+   "monthlyHead": 17.0,
+   "denom": 13.0,
+   "days": 31,
+   "monthGas": 615.35,
+   "monthDiesel": 119.35,
+   "monthTons": 734.7,
+   "monthSge": 37801.4,
+   "daySge": 1219.4,
+   "monthEff": 93.8,
+   "multiple": 1.4431,
+   "effScore": 21.65,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 19.85,
+    "dieselTon": 3.85,
+    "eff": 93.8,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 21106.59,
-    "head": 27,
-    "rawEff": 781.7255
-   },
-   "effSeg": 42,
-   "rank": 4
-  },
-  {
-   "name": "白河",
-   "gasTon": 3.1304,
-   "dieselTon": 19.9826,
-   "totalTon": 23.113,
-   "head": 14,
-   "denom": 10,
-   "sge": 749.71,
-   "eff": 74.97,
-   "rate": 1.1488,
-   "grade": "优秀",
-   "rawEff": 1.6509,
-   "month": {
-    "tons": 23.11,
-    "head": 14,
-    "rawEff": 1.6509
-   },
-   "year": {
-    "tons": 6472.23,
-    "head": 14,
-    "rawEff": 462.3018
-   },
-   "effSeg": 26.73,
-   "rank": 9
-  },
-  {
-   "name": "旬阳",
-   "gasTon": 2.5913,
-   "dieselTon": 30.9312,
-   "totalTon": 33.5225,
-   "head": 12,
-   "denom": 8,
-   "sge": 1035.03,
-   "eff": 129.38,
-   "rate": 1.9825,
-   "grade": "优秀",
-   "rawEff": 2.7935,
-   "month": {
-    "tons": 33.52,
-    "head": 12,
-    "rawEff": 2.7935
-   },
-   "year": {
-    "tons": 5957.16,
-    "head": 12,
-    "rawEff": 496.4297
-   },
-   "effSeg": 46.13,
    "rank": 3
   },
   {
-   "name": "略阳",
-   "gasTon": 0.7888,
-   "dieselTon": 2.4939,
-   "totalTon": 3.2827,
-   "head": 8,
-   "denom": 4,
-   "sge": 115.72,
-   "eff": 28.93,
-   "rate": 0.4433,
-   "grade": "不合格",
-   "rawEff": 0.4103,
-   "month": {
-    "tons": 3.28,
-    "head": 8,
-    "rawEff": 0.4103
+   "name": "富平",
+   "monthlyHead": 21.0,
+   "denom": 17.0,
+   "days": 31,
+   "monthGas": 757.64,
+   "monthDiesel": 175.46,
+   "monthTons": 933.1,
+   "monthSge": 47340.72,
+   "daySge": 1527.12,
+   "monthEff": 89.83,
+   "multiple": 1.382,
+   "effScore": 20.73,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 24.44,
+    "dieselTon": 5.66,
+    "eff": 89.83,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 1022.11,
-    "head": 8,
-    "rawEff": 127.7635
-   },
-   "effSeg": 10.32,
-   "rank": 15
+   "rank": 4
   },
   {
-   "name": "玉华宫",
-   "gasTon": 4.9838,
-   "dieselTon": 1.9537,
-   "totalTon": 6.9375,
-   "head": 12,
-   "denom": 8,
-   "sge": 333.62,
-   "eff": 41.7,
-   "rate": 0.639,
-   "grade": "不合格",
-   "rawEff": 0.5781,
-   "month": {
-    "tons": 6.94,
-    "head": 12,
-    "rawEff": 0.5781
+   "name": "韩城",
+   "monthlyHead": 18.0,
+   "denom": 14.0,
+   "days": 31,
+   "monthGas": 572.57,
+   "monthDiesel": 177.63,
+   "monthTons": 750.2,
+   "monthSge": 37037.56,
+   "daySge": 1194.76,
+   "monthEff": 85.34,
+   "multiple": 1.3129,
+   "effScore": 19.69,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 18.47,
+    "dieselTon": 5.73,
+    "eff": 85.34,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 1734.25,
-    "head": 12,
-    "rawEff": 144.5205
-   },
-   "effSeg": 14.87,
-   "rank": 14
-  },
-  {
-   "name": "照金",
-   "gasTon": 1.0843,
-   "dieselTon": 16.9212,
-   "totalTon": 18.0055,
-   "head": 9,
-   "denom": 5,
-   "sge": 547.67,
-   "eff": 109.53,
-   "rate": 1.6784,
-   "grade": "优秀",
-   "rawEff": 2.0006,
-   "month": {
-    "tons": 18.01,
-    "head": 9,
-    "rawEff": 2.0006
-   },
-   "year": {
-    "tons": 778.89,
-    "head": 9,
-    "rawEff": 86.5435
-   },
-   "effSeg": 39.05,
    "rank": 5
   },
   {
-   "name": "天汉水城",
-   "gasTon": 6.9288,
-   "dieselTon": 32.1793,
-   "totalTon": 39.1081,
-   "head": 17,
-   "denom": 13,
-   "sge": 1312.35,
-   "eff": 100.95,
-   "rate": 1.5469,
-   "grade": "优秀",
-   "rawEff": 2.3005,
-   "month": {
-    "tons": 39.11,
-    "head": 17,
-    "rawEff": 2.3005
+   "name": "秦岭",
+   "monthlyHead": 27.0,
+   "denom": 23.0,
+   "days": 31,
+   "monthGas": 875.13,
+   "monthDiesel": 188.17,
+   "monthTons": 1063.3,
+   "monthSge": 54276.04,
+   "daySge": 1750.84,
+   "monthEff": 76.12,
+   "multiple": 1.1711,
+   "effScore": 17.57,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 28.23,
+    "dieselTon": 6.07,
+    "eff": 76.12,
+    "note": "定稿附录B 日均参考值"
    },
-   "year": {
-    "tons": 9868.57,
-    "head": 17,
-    "rawEff": 580.5039
+   "rank": 6
+  },
+  {
+   "name": "白河",
+   "monthlyHead": 13.0,
+   "denom": 9.0,
+   "days": 31,
+   "monthGas": 279.0,
+   "monthDiesel": 161.2,
+   "monthTons": 440.2,
+   "monthSge": 20137.6,
+   "daySge": 649.6,
+   "monthEff": 72.18,
+   "multiple": 1.1104,
+   "effScore": 16.66,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 9.0,
+    "dieselTon": 5.2,
+    "eff": 72.18,
+    "note": "定稿附录B 日均参考值"
    },
-   "effSeg": 35.99,
    "rank": 7
+  },
+  {
+   "name": "玉华宫",
+   "monthlyHead": 12.0,
+   "denom": 8.0,
+   "days": 31,
+   "monthGas": 279.93,
+   "monthDiesel": 61.07,
+   "monthTons": 341.0,
+   "monthSge": 17386.04,
+   "daySge": 560.84,
+   "monthEff": 70.11,
+   "multiple": 1.0785,
+   "effScore": 16.18,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 9.03,
+    "dieselTon": 1.97,
+    "eff": 70.1,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 8
+  },
+  {
+   "name": "天汉水城",
+   "monthlyHead": 17.0,
+   "denom": 13.0,
+   "days": 31,
+   "monthGas": 251.1,
+   "monthDiesel": 378.2,
+   "monthTons": 629.3,
+   "monthSge": 24651.2,
+   "daySge": 795.2,
+   "monthEff": 61.17,
+   "multiple": 0.9411,
+   "effScore": 14.12,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 8.1,
+    "dieselTon": 12.2,
+    "eff": 61.17,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 9
+  },
+  {
+   "name": "南沙",
+   "monthlyHead": 15.0,
+   "denom": 11.0,
+   "days": 31,
+   "monthGas": 163.99,
+   "monthDiesel": 397.11,
+   "monthTons": 561.1,
+   "monthSge": 20302.52,
+   "daySge": 654.92,
+   "monthEff": 59.54,
+   "multiple": 0.916,
+   "effScore": 13.74,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 5.29,
+    "dieselTon": 12.81,
+    "eff": 59.54,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 10
+  },
+  {
+   "name": "旬阳",
+   "monthlyHead": 14.0,
+   "denom": 10.0,
+   "days": 31,
+   "monthGas": 181.66,
+   "monthDiesel": 212.04,
+   "monthTons": 393.7,
+   "monthSge": 16110.08,
+   "daySge": 519.68,
+   "monthEff": 51.97,
+   "multiple": 0.7995,
+   "effScore": 11.99,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 5.86,
+    "dieselTon": 6.84,
+    "eff": 51.97,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 11
+  },
+  {
+   "name": "洋县",
+   "monthlyHead": 21.0,
+   "denom": 17.0,
+   "days": 31,
+   "monthGas": 415.71,
+   "monthDiesel": 139.19,
+   "monthTons": 554.9,
+   "monthSge": 27177.08,
+   "daySge": 876.68,
+   "monthEff": 51.57,
+   "multiple": 0.7934,
+   "effScore": 11.9,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 13.41,
+    "dieselTon": 4.49,
+    "eff": 51.57,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 12
+  },
+  {
+   "name": "富县",
+   "monthlyHead": 12.0,
+   "denom": 8.0,
+   "days": 31,
+   "monthGas": 124.62,
+   "monthDiesel": 30.38,
+   "monthTons": 155.0,
+   "monthSge": 7829.36,
+   "daySge": 252.56,
+   "monthEff": 31.57,
+   "multiple": 0.4857,
+   "effScore": 7.29,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 4.02,
+    "dieselTon": 0.98,
+    "eff": 31.57,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 13
+  },
+  {
+   "name": "照金",
+   "monthlyHead": 11.0,
+   "denom": 7.0,
+   "days": 31,
+   "monthGas": 74.4,
+   "monthDiesel": 27.9,
+   "monthTons": 102.3,
+   "monthSge": 4947.6,
+   "daySge": 159.6,
+   "monthEff": 22.8,
+   "multiple": 0.3508,
+   "effScore": 5.26,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 2.4,
+    "dieselTon": 0.9,
+    "eff": 22.8,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 14
+  },
+  {
+   "name": "略阳",
+   "monthlyHead": 8.0,
+   "denom": 4.0,
+   "days": 31,
+   "monthGas": 35.03,
+   "monthDiesel": 26.97,
+   "monthTons": 62.0,
+   "monthSge": 2716.84,
+   "daySge": 87.64,
+   "monthEff": 21.91,
+   "multiple": 0.3371,
+   "effScore": 5.06,
+   "dataSource": "baseline",
+   "today": {
+    "gasTon": 1.13,
+    "dieselTon": 0.87,
+    "eff": 21.91,
+    "note": "定稿附录B 日均参考值"
+   },
+   "rank": 15
+  }
+ ],
+ "history": [
+  {
+   "month": "2026-11",
+   "avgEff": 65.15,
+   "maxEff": 95.18,
+   "minEff": 21.91,
+   "dataMode": "baseline",
+   "stations": {
+    "华山": 95.18,
+    "汉中": 94.22,
+    "宁陕": 93.8,
+    "富平": 89.83,
+    "韩城": 85.34,
+    "秦岭": 76.12,
+    "白河": 72.18,
+    "玉华宫": 70.11,
+    "天汉水城": 61.17,
+    "南沙": 59.54,
+    "旬阳": 51.97,
+    "洋县": 51.57,
+    "富县": 31.57,
+    "照金": 22.8,
+    "略阳": 21.91
+   }
   }
  ]
 }

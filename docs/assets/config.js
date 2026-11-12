@@ -69,6 +69,8 @@ window.CFG = {
   /* 投诉扣分（前三档按分扣减、不设下限；重大投诉一票否决） */
   complaint: { escalate: 10, repeat: 20, regulator: 50, major: 'veto' },
 
+  /* 综合得分封顶：五段各自封顶之和＝120，进步加分不得突破 */
+  totalCap: 120,
   progressCap: 3,
   progressPerPct: 0.2,
 
