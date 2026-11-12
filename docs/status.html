@@ -197,10 +197,32 @@ document.getElementById('btnIssue').addEventListener('click', function () {
   h += '<div class="kv kv--total"><span>生效</span><b>待科室推送</b></div>';
   h += '</section>';
   h += '<div class="card"><div class="hint" style="margin-bottom:10px">' + UI.esc(t.desc) + '</div>';
-  h += '<button class="btn btn--primary btn--block" id="btnDownload">下载变更单</button>';
-  h += '<p class="hint" style="margin-top:10px">下载后把文件放进 <b>D:\\加油站综合考核系统\\inbox\\status\\</b>，' +
-    '科室双击运行 <b>status_push.bat</b> 即自动合并并推送。也可直接把文件发给我，我来推。</p></div>';
+  h += '<button class="btn btn--primary btn--block" id="btnDownload">① 下载变更单</button>';
+  h += '<button class="btn btn--ghost btn--block" id="btnCopy" style="margin-top:10px">① 或复制文本（手机上发给科室）</button>';
+  h += '<div class="warn" style="margin-top:14px">' +
+    '<b>还没生效。</b>变更单只是一张指令，接下来二选一：<br>' +
+    '<b>在科室电脑上</b>：双击桌面 <b>status_push.bat</b>，脚本会自动从「下载」目录捡走刚下载的文件并推送；<br>' +
+    '<b>手机上 / 不在电脑前</b>：点上面「复制文本」，直接粘贴发给我，我代推。<br>' +
+    '约 1 分钟后全网生效，首页与排名榜会显示新状态。</div></div>';
   document.getElementById('preview').innerHTML = h;
+
+  document.getElementById('btnCopy').addEventListener('click', function () {
+    var text = JSON.stringify(rec, null, 2);
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); UI.toast('已复制，粘贴发给科室即可'); }
+      catch (e) { UI.toast('复制失败，请改用下载'); }
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        UI.toast('已复制，粘贴发给科室即可');
+      }).catch(fallback);
+    } else fallback();
+  });
 
   document.getElementById('btnDownload').addEventListener('click', function () {
     var blob = new Blob([JSON.stringify(rec, null, 2)], { type: 'application/json;charset=utf-8' });
