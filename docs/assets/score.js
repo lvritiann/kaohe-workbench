@@ -7,6 +7,8 @@
   var C = window.CFG, E = window.Engine, S = window.Store;
 
   var DATA = null, INS = null, USER = null;
+  var itemsPromise = null;   /* 题目后台预取，不阻塞登录 */
+  var vendorPromise = null;  /* Excel / Zip 组件按需加载，登录前不下载 */
   var S_ = {
     station: localStorage.getItem('lastStation') || '',
     month: '', inspector: '', items: {}, veto: {}, notes: {}, photos: {}
@@ -24,42 +26,86 @@
     setTimeout(function () { t.classList.remove('show'); }, 2400);
   }
 
-  /* ---------------- 登录 ---------------- */
+  /* ---------- 离线组件：只在真正要导出时加载 ----------
+     登录前同步加载 862KB SheetJS + 96KB JSZip 是登录慢的主因。 */
+
+  function loadVendor() {
+    var need = [];
+    if (typeof XLSX === 'undefined') need.push('assets/vendor/xlsx.full.min.js');
+    if (typeof JSZip === 'undefined') need.push('assets/vendor/jszip.min.js');
+    if (!need.length) return Promise.resolve();
+    if (vendorPromise) return vendorPromise;
+    vendorPromise = Promise.all(need.map(function (src) {
+      return new Promise(function (res, rej) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = function () { res(); };
+        s.onerror = function () { rej(new Error('离线组件加载失败：' + src)); };
+        document.head.appendChild(s);
+      });
+    })).catch(function (e) { vendorPromise = null; throw e; });
+    return vendorPromise;
+  }
+
+  /* ---------------- 登录：只等几百字节的名单，秒开 ---------------- */
 
   function boot() {
     S_.month = nowMonth();
-    Promise.all([
-      fetch('data/items.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }),
-      fetch(C.inspectorsFile, { cache: 'no-cache' }).then(function (r) { return r.json(); })
-    ]).then(function (res) {
-      DATA = res[0]; INS = res[1];
-      localStorage.setItem('itemsCache', JSON.stringify(DATA));
-      try { USER = JSON.parse(sessionStorage.getItem('kaohe_user') || 'null'); } catch (e) { USER = null; }
-      if (USER && (INS.inspectors || []).some(function (x) { return x.id === USER.id; })) return enterApp();
-      renderLogin();
-    }).catch(function () {
-      var c = localStorage.getItem('itemsCache');
-      if (!c) { $('app').innerHTML = '<div class="err">题目与名单加载失败，请联网后再打开一次。</div>'; return; }
-      DATA = JSON.parse(c);
-      INS = { inspectors: [] };
-      renderLogin();
-    });
+
+    /* 题目 28KB 后台预取，登录界面不等它 */
+    itemsPromise = fetch('data/items.json', { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) {
+        DATA = j;
+        localStorage.setItem('itemsCache', JSON.stringify(j));
+        return j;
+      })
+      .catch(function () {
+        var c = localStorage.getItem('itemsCache');
+        if (!c) return null;
+        try { DATA = JSON.parse(c); } catch (e) { DATA = null; }
+        return DATA;
+      });
+
+    /* 名单拿到就渲染登录；断网用上次缓存 */
+    fetch(C.inspectorsFile, { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (j) {
+        INS = j;
+        localStorage.setItem('inspectorsCache', JSON.stringify(j));
+        afterInspectors();
+      })
+      .catch(function () {
+        var c = localStorage.getItem('inspectorsCache');
+        try { INS = c ? JSON.parse(c) : { inspectors: [] }; } catch (e) { INS = { inspectors: [] }; }
+        afterInspectors();
+      });
+  }
+
+  function afterInspectors() {
+    try { USER = JSON.parse(sessionStorage.getItem('kaohe_user') || 'null'); } catch (e) { USER = null; }
+    if (USER && (INS.inspectors || []).some(function (x) { return x.id === USER.id; })) return enterApp();
+    renderLogin();
   }
 
   function renderLogin() {
     $('actionbar').style.display = 'none';
     $('subInfo').textContent = '请选择打分人';
+    var list = INS.inspectors || [];
     var h = '<div class="login-wrap"><div class="card">';
     h += '<div class="login-logo">✓</div>';
     h += '<h2 style="text-align:center;font-size:18px;margin-bottom:4px">现场检查打分</h2>';
     h += '<p class="hint" style="text-align:center;margin-bottom:18px">选择自己的名字，输入个人口令</p>';
     h += '<div class="field"><label>打分人</label><select id="lgName"><option value="">请选择</option>';
-    (INS.inspectors || []).forEach(function (x) {
+    list.forEach(function (x) {
       h += '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>';
     });
     h += '</select></div>';
     h += '<div class="field"><label>个人口令</label><input type="password" id="lgPass" placeholder="输入口令" autocomplete="off"></div>';
     h += '<button class="btn btn--primary btn--block" id="lgGo" style="margin-top:18px">登录</button>';
+    if (!list.length) {
+      h += '<div class="err" style="margin-top:12px">打分人名单未加载。请联网打开一次本页，之后断网也能登录。</div>';
+    }
     h += '<p class="hint" style="margin-top:12px">登录后每条扣分记录自动署名。名单与口令在 <b>data/inspectors.json</b> 里维护。</p>';
     h += '</div></div>';
     $('app').innerHTML = h;
@@ -82,7 +128,19 @@
   function enterApp() {
     S_.inspector = USER.name;
     $('subInfo').textContent = USER.name + ' · ' + (S_.month || '');
-    render();
+    /* 进界面后后台把导出组件备好，填表这段时间足够加载完 */
+    loadVendor().catch(function () { });
+    if (DATA) { render(); return; }
+    $('app').innerHTML = '<div class="card" style="margin-top:16px"><div class="sect__head">' +
+      '<span class="sect__title">正在载入检查项…</span></div>' +
+      '<div class="hint">73 项判定与 6 项否决，首次需联网取一次。</div></div>';
+    itemsPromise.then(function (d) {
+      if (!d) {
+        $('app').innerHTML = '<div class="err">检查项加载失败，请联网打开一次本页再试；已填内容存在本机草稿里，不会丢。</div>';
+        return;
+      }
+      render();
+    });
   }
 
   /* ---------------- 主界面 ---------------- */
@@ -390,49 +448,63 @@
     var stamp = ts.getFullYear() + pad(ts.getMonth() + 1) + pad(ts.getDate()) + pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
     var base = '检查表_' + S_.station + '_' + S_.month + '_' + stamp;
 
-    try {
-      var wb = buildWorkbook(res, veto, ts);
-      var xlsxB64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-      var zip = new JSZip();
-      zip.file(base + '.xlsx', xlsxB64, { base64: true });
+    showSheet('<div class="sheet__grip"></div><h3>正在打包</h3>' +
+      '<div class="hint">正在准备离线导出组件，请稍候…</div>');
 
-      var manifest = {
-        version: 'V5', station: S_.station, month: S_.month, inspector: USER.name,
-        submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
-        veto: veto.failed, photos: []
-      };
-      DATA.items.forEach(function (it) {
-        if (S_.items[it.no] !== 'no') return;
-        var key = it.no;
-        (S_.photos[key] || []).forEach(function (p, i) {
-          var nm = 'photos/' + S_.station + '_项' + it.no + '_' + (i + 1) + '.jpg';
-          zip.file(nm, p.data.split(',')[1], { base64: true });
-          manifest.photos.push({ itemNo: it.no, item: it.name, file: nm, reason: (S_.notes[key] || {}).reason || '' });
-        });
-      });
-      DATA.veto.forEach(function (v) {
-        if (S_.veto[v.no] !== 'no') return;
-        (S_.photos['v' + v.no] || []).forEach(function (p, i) {
-          var nm = 'photos/否决' + v.no + '_' + (i + 1) + '.jpg';
-          zip.file(nm, p.data.split(',')[1], { base64: true });
-          manifest.photos.push({ itemNo: 'v' + v.no, item: v.name, file: nm, reason: (S_.notes['v' + v.no] || {}).reason || '' });
-        });
-      });
-      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+    loadVendor().then(function () {
+      try {
+        var wb = buildWorkbook(res, veto, ts);
+        var xlsxB64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        var zip = new JSZip();
+        zip.file(base + '.xlsx', xlsxB64, { base64: true });
 
-      zip.generateAsync({ type: 'blob' }).then(function (blob) {
-        var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-        a.download = base + '.zip'; document.body.appendChild(a); a.click();
-        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-        S.removeDraft(S_.station + '|' + S_.month);
-        closeSheet();
-        showSheet('<div class="sheet__grip"></div><h3>已生成</h3><div class="hint">检查表与佐证照片已打包下载：<br><b>' + esc(base + '.zip') + '</b><br><br>发回计划经营科，由科室把照片导入金山在线表；GitHub 仓库不存照片。</div>' +
-          '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>');
-      });
-    } catch (err) {
-      showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(err.message) + '</div>' +
-        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
-    }
+        var manifest = {
+          version: 'V5', station: S_.station, month: S_.month, inspector: USER.name,
+          submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
+          veto: veto.failed, photos: []
+        };
+        DATA.items.forEach(function (it) {
+          if (S_.items[it.no] !== 'no') return;
+          var key = it.no;
+          (S_.photos[key] || []).forEach(function (p, i) {
+            var nm = 'photos/' + S_.station + '_项' + it.no + '_' + (i + 1) + '.jpg';
+            zip.file(nm, p.data.split(',')[1], { base64: true });
+            manifest.photos.push({ itemNo: it.no, item: it.name, file: nm, reason: (S_.notes[key] || {}).reason || '' });
+          });
+        });
+        DATA.veto.forEach(function (v) {
+          if (S_.veto[v.no] !== 'no') return;
+          (S_.photos['v' + v.no] || []).forEach(function (p, i) {
+            var nm = 'photos/否决' + v.no + '_' + (i + 1) + '.jpg';
+            zip.file(nm, p.data.split(',')[1], { base64: true });
+            manifest.photos.push({ itemNo: 'v' + v.no, item: v.name, file: nm, reason: (S_.notes['v' + v.no] || {}).reason || '' });
+          });
+        });
+        zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+        zip.generateAsync({ type: 'blob' }).then(function (blob) {
+          var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+          a.download = base + '.zip'; document.body.appendChild(a); a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+          S.removeDraft(S_.station + '|' + S_.month);
+          closeSheet();
+          showSheet('<div class="sheet__grip"></div><h3>已生成</h3><div class="hint">检查表与佐证照片已打包下载：<br><b>' + esc(base + '.zip') + '</b><br><br>发回计划经营科，由科室把照片导入金山在线表；GitHub 仓库不存照片。</div>' +
+            '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>');
+        }).catch(function (err) { packFail(err); });
+      } catch (err) {
+        packFail(err);
+      }
+    }).catch(function (e) {
+      showSheet('<div class="sheet__grip"></div><h3>离线组件未就绪</h3>' +
+        '<div class="err">' + esc(e.message) + '</div>' +
+        '<div class="hint">请联网打开一次本页，让浏览器缓存导出组件后再提交；打分内容已存本机草稿，不会丢失。</div>' +
+        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回填写</button></div>');
+    });
+  }
+
+  function packFail(err) {
+    showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(err.message) + '</div>' +
+      '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
   }
 
   function buildWorkbook(res, veto, ts) {

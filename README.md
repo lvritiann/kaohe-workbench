@@ -40,6 +40,8 @@
 
 手机端优先，支持日间/暗色主题；Service Worker 离线缓存，站点无信号也能打分。
 
+**登录秒开**：`score.html` 不再同步加载 862KB 的 Excel 组件与 96KB 的 Zip 组件。登录只等几百字节的 `data/inspectors.json`，73 项题目后台预取，导出组件登录后后台备好、提交时确保就绪（首屏从约 1 MB 降到约 40 KB）。名单与题目都有 localStorage 兜底，断网可登录、可打分。
+
 ## 三、数据流
 
 ```
@@ -93,7 +95,7 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 | 时点 | 动作 |
 |---|---|
 | 25—31 日 | 现场检查打分，导出 zip |
-| 次月 3 日 | 站端报数（油品/非油/人数） |
+| 次月 3 日 | 计划经营科汇总核对：从既有报表／在线驾驶舱取数（油品、非油、人数、投诉），**站端只确认结果、不另行填报** |
 | 次月 5 日 | 汇总五段，`python tools/build_rank.py` 生成 rank.json |
 | 次月 7 日 | 投诉统计并入 |
 | 次月 10 日 | 推 GitHub，发榜 |
@@ -122,9 +124,11 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 11. **`git push` 卡住 / SIGTERM**：代理环境下 HTTP/2 大包会挂起。改用「显式令牌 + HTTP/1.1」（令牌只从 `.gh_token.txt` 读，不写入 git 配置）：
     `python -c "import subprocess;t=open('.gh_token.txt',encoding='utf-8').read().strip();subprocess.run(['git','-c','http.version=HTTP/1.1','-c','http.postBuffer=5242880','push','https://x-access-token:'+t+'@github.com/lvritiann/kaohe-workbench.git','main'])"`
     验证：看 GitHub 仓库最新提交 SHA 是否等于本地 `git rev-parse --short HEAD`。若 `git ls-remote` 报 `schannel: server closed abruptly`，只是网络抖动，用 API 查 `branches/main` 确认即可，不要盲目重推。
+12. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v5-2` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
 
 ## 九、口径红线
 
+- **数据归口计划经营科**：全部计分数据从既有报表／在线驾驶舱按月汇总核对，站端只确认结果、不另行填报（定稿第十二章）；任何页面与文档都不得再设置站点填报环节。
 - 不要用「实际在岗」单点人数代替「月均在岗」。
 - 不要再引入 90/80/70/60 等级线，V5 只排名。
 - 不要改 SGE 系数、基准 65、扣减 4 人这三项，除非定稿修订。
