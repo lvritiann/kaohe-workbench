@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>本地管理台 · 运营状态直推</title>
+<link rel="stylesheet" href="/docs/assets/app.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar__eyebrow">LOCAL CONSOLE · 127.0.0.1</div>
+  <div class="appbar__row">
+    <div style="min-width:0">
+      <h1 class="appbar__title">本地管理台</h1>
+      <div class="appbar__sub">点一下直接推送，无需线上网页</div>
+    </div>
+    <span class="tag ok" id="linkTag">连接中…</span>
+  </div>
+</header>
+
+<main class="screen">
+
+  <section class="card" style="margin-top:16px">
+    <div class="sect__head" style="margin-bottom:10px">
+      <span class="sect__title">签发并推送</span><span class="sect__hint">一步生效</span>
+    </div>
+
+    <div class="field"><label>管理口令</label><input type="password" id="pass" placeholder="KH-ADMIN-2027"></div>
+    <div class="field"><label>油站</label><select id="fStation"></select></div>
+    <div class="field"><label>状态</label><select id="fStatus">
+      <option value="temp_closed">临时关停（不出分、不排名）</option>
+      <option value="partial">部分停业（按实际经营天数折算）</option>
+      <option value="force_majeure">不可抗力（剔除受影响天数）</option>
+      <option value="reopened">复营（次月重新入榜）</option>
+      <option value="normal">恢复正常营业</option>
+    </select></div>
+    <div class="field"><label>起始日期</label><input type="date" id="fFrom"></div>
+    <div class="field"><label>结束日期（留空＝持续）</label><input type="date" id="fTo"></div>
+    <div class="field" id="daysField" style="display:none"><label>实际经营天数</label><input type="text" id="fDays" inputmode="numeric"></div>
+    <div class="field"><label>原因 / 依据</label><input type="text" id="fReason"></div>
+    <div class="field"><label>签发人</label><input type="text" id="fOperator"></div>
+    <div class="field"><label>佐证说明</label><input type="text" id="fEvidence"></div>
+
+    <button class="btn btn--primary btn--block" id="btnGo" style="margin-top:18px">签发并推送</button>
+    <button class="btn btn--ghost btn--block" id="btnDry" style="margin-top:10px">仅校验（不推送）</button>
+    <div id="out" style="margin-top:14px"></div>
+  </section>
+
+  <div class="sect__head" style="margin-top:22px"><span class="sect__title">当前台账</span><span class="sect__hint" id="cnt"></span></div>
+  <div id="ledger"></div>
+
+  <p class="sect__note" style="margin-top:14px">
+    本页由本机 Python 服务托管（不是 file:// 打开），所以能直接调用本地 git 推送。
+    服务只监听 127.0.0.1，关掉黑色命令行窗口即停止。
+  </p>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+var STATIONS = ['富平','汉中','秦岭','华山','白河','宁陕','韩城','南沙','旬阳','天汉水城','洋县','玉华宫','富县','照金','略阳'];
+var LABEL = {
+  normal:'正常营业', temp_closed:'临时关停', partial:'部分停业',
+  force_majeure:'不可抗力', reopened:'复营'
+};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2600);}
+function two(n){return (n<10?'0':'')+n;}
+function today(){var d=new Date();return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate());}
+
+var sel=document.getElementById('fStation');
+STATIONS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;sel.appendChild(o);});
+document.getElementById('fFrom').value=today();
+document.getElementById('fOperator').value=localStorage.getItem('localOperator')||'';
+document.getElementById('pass').value=sessionStorage.getItem('localPass')||'';
+
+document.getElementById('fStatus').addEventListener('change',function(){
+  document.getElementById('daysField').style.display =
+    (this.value==='partial'||this.value==='force_majeure')?'block':'none';
+});
+
+function build(){
+  var d=new Date();
+  return {
+    id:'ST-'+d.getFullYear()+two(d.getMonth()+1)+two(d.getDate())+'-'+two(d.getHours())+two(d.getMinutes())+two(d.getSeconds()),
+    station:sel.value,
+    status:document.getElementById('fStatus').value,
+    from:document.getElementById('fFrom').value,
+    to:document.getElementById('fTo').value||null,
+    reason:document.getElementById('fReason').value.trim(),
+    affectedDays:document.getElementById('fDays').value.trim()||null,
+    operator:document.getElementById('fOperator').value.trim(),
+    setAt:d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())+' '+two(d.getHours())+':'+two(d.getMinutes()),
+    evidence:document.getElementById('fEvidence').value.trim(),
+    active:true
+  };
+}
+
+function submit(dry){
+  var rec=build(), pass=document.getElementById('pass').value.trim();
+  sessionStorage.setItem('localPass',pass);
+  localStorage.setItem('localOperator',rec.operator);
+  var box=document.getElementById('out');
+  box.innerHTML='<div class="hint">处理中，请稍候…（推送遇网络波动会自动重试）</div>';
+  fetch('/api/issue',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pass:pass,record:rec,dryRun:!!dry})})
+  .then(function(r){return r.json();})
+  .then(function(res){
+    var h='<div class="'+(res.ok?'card':'err')+'">';
+    h+='<div class="kv kv--total"><span>结果</span><b>'+esc(res.message)+'</b></div>';
+    (res.steps||[]).forEach(function(s){h+='<div class="kv"><span>步骤</span><b>'+esc(s)+'</b></div>';});
+    h+='</div>';
+    if(res.pushed) h+='<div class="warn">已推送，约 1 分钟后线上首页与排名榜生效。</div>';
+    box.innerHTML=h;
+    if(res.pushed) loadLedger();
+  })
+  .catch(function(e){box.innerHTML='<div class="err">服务未响应：'+esc(e.message)+'。请确认黑色命令行窗口还开着。</div>';});
+}
+
+document.getElementById('btnGo').addEventListener('click',function(){submit(false);});
+document.getElementById('btnDry').addEventListener('click',function(){submit(true);});
+
+function loadLedger(){
+  fetch('/api/ledger').then(function(r){return r.json();}).then(function(d){
+    document.getElementById('linkTag').textContent='已连接';
+    var list=(d.records||[]).slice().reverse();
+    document.getElementById('cnt').textContent=list.length+' 条';
+    var h='';
+    list.forEach(function(r){
+      h+='<section class="card">';
+      h+='<div class="kv"><span>油站</span><b>'+esc(r.station)+'</b></div>';
+      h+='<div class="kv"><span>状态</span><b><span class="tag '+(r.status==='temp_closed'?'no':'ok')+'">'+esc(LABEL[r.status]||r.status)+'</span></b></div>';
+      h+='<div class="kv"><span>期间</span><b>'+esc(r.from||'')+' 起'+(r.to?' 至 '+esc(r.to):'（持续）')+'</b></div>';
+      h+='<div class="kv"><span>原因</span><b>'+esc(r.reason||'')+'</b></div>';
+      h+='<div class="kv"><span>签发</span><b>'+esc(r.operator||'')+' · '+esc(r.setAt||'')+'</b></div>';
+      h+='</section>';
+    });
+    document.getElementById('ledger').innerHTML=h||'<div class="card"><div class="hint">台账为空</div></div>';
+  }).catch(function(){document.getElementById('linkTag').textContent='未连接';});
+}
+loadLedger();
+</script>
+</body>
+</html>

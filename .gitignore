@@ -5,11 +5,10 @@
 *.pdf
 ~$*
 
-# 本机工具与运行时目录
-tools/
-# 例外：AirScript 源码纳入版本管理（不含令牌，便于留档与回滚）
-!tools/airscript/
-!tools/airscript/**
+# 本机工具：Python 脚本入库留档，其余本地文件不入库
+tools/*
+!tools/*.py
+# tools/airscript/ 内含明文令牌，整个目录保持排除，禁止入库
 inbox/
 .workbuddy/
 
