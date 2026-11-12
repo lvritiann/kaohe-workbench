@@ -123,12 +123,16 @@ def main():
                 "tag=sheet_pic_type_attachment 插到对应行。"
     })
 
-    # 可粘贴 TSV：前 12 列与在线表列序一致，末 2 列为建议新增列
-    cols = cfg.get("columns") or [
+    # 可粘贴 TSV：列序与金山「检查明细」19 列完全一致（tools/config.json）
+    import datetime as dt
+    cols = list(cfg.get("columns") or [
         "月份", "站名", "表类型", "序号", "大类", "检查项目",
-        "标准分", "得分", "结果", "说明", "检查人", "提交时间"
-    ]
-    cols = list(cols) + ["照片文件名", "照片附件ID"]
+        "标准分", "得分", "结果", "说明", "检查人", "提交时间",
+        "照片文件名", "照片附件ID", "折算得分(100)", "运营段得分(20)",
+        "一票否决项", "数据来源", "更新时间"
+    ])
+    now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    veto_text = "、".join(m.get("veto", []) or [])
     lines = ["\t".join(cols)]
     for q in queue:
         row = {
@@ -136,7 +140,12 @@ def main():
             "序号": q["itemNo"], "大类": "", "检查项目": q["item"],
             "标准分": "", "得分": "", "结果": "扣分", "说明": q["reason"],
             "检查人": inspector, "提交时间": submitted,
-            "照片文件名": q["filename"], "照片附件ID": ""
+            "照片文件名": q["filename"], "照片附件ID": "",
+            "折算得分(100)": m.get("converted", ""),
+            "运营段得分(20)": m.get("inspectScore", ""),
+            "一票否决项": veto_text,
+            "数据来源": "现场打分zip / " + name,
+            "更新时间": now
         }
         lines.append("\t".join(str(row.get(c, "")).replace("\t", " ").replace("\n", " ")
                               for c in cols))

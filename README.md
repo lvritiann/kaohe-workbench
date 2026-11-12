@@ -133,3 +133,35 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 - 不要再引入 90/80/70/60 等级线，V5 只排名。
 - 不要改 SGE 系数、基准 65、扣减 4 人这三项，除非定稿修订。
 - `tools/airscript/` 目录含明文令牌，**不入库、不外发**；令牌轮换后需重粘脚本。
+
+## 十、分站柴汽销量数据源（成品油驾驶舱）
+
+2026-11-13 全量核查结果，链路从上到下：
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 在线看板 | <https://lvritiann.github.io/youpin-sales-cockpit/> | 单文件静态页，数据构建期注入；站点排行恒 15 对实体站 |
+| 本地工程 | `D:/高速延长公司综合管理平台/_publish/youpin-sales-cockpit/` | `cockpit/index.html` 由 `_kdocs/build_cockpit2.py` 生成 |
+| **驾驶舱底表** | `D:/高速延长公司综合管理平台/_publish/成品油经营数据中转簿.xlsx` →「站级明细」 | 1002 行；字段 `会计月｜站名｜路段｜零售吨｜柴油吨｜汽油吨｜升｜含税金额元｜万元` |
+| 原始日报 | 金山《202611销售及库存日报（新).xlsx》file_id `hLsU8RQ4Q9MPTbvtSaRtxxQdQoC38LbED` | AirScript v2.6 抽成 `_incoming/data.json`（meta/sale/channels/bigcust/trade） |
+| 油品任务 | 金山《加油站成品油月任务及完成2026.xlsx》file_id `xV6qJtcKQ9MkjdHk42kUrxSqEqE1Jm1At` | 定稿表8 的油品任务与实际销量来源 |
+| 周报 | 成品油销售周报2026（ima 个人库） | 分站 周/月/年 柴油、汽油、合计、汽柴比，单位吨 |
+
+口径：会计月＝上月 26 日—本月 25 日；站级明细按站区分行（华山南/华山北等），**去末尾「东南西北」后缀合并为 15 站**；只取吨数，不取含税金额。
+
+本地生成器：
+- `python tools/build_oil_sales.py` → `inbox/油源/oil_sales_all.json`（34 期 / 501 条站月记录）+ `oil_sales_<最新月>.tsv`。全量台账只存本机 `inbox/`，**不推公开仓库**。
+- `python tools/build_kdocs_template.py` → `inbox/油源/考核工作台数据源_扩列_<日期>.xlsx`（本地预览 / 回滚备份）。
+
+## 十一、金山「考核工作台数据源」表结构
+
+文件：<https://www.kdocs.cn/l/crmBWYFuwdwx> （file_id `85jEfN5x3rM95XxYSTpi1xHALnB45UGde`）
+
+| 表 | 列数 | 内容 |
+|---|---|---|
+| 检查明细 | 19 | 原 12 列 ＋ 照片文件名／照片附件ID／折算得分(100)／运营段得分(20)／一票否决项／数据来源／更新时间 |
+| 月度汇总 | 30 | 一行一站一月：会计月区间、真实柴汽销量、五段得分、投诉/进步/否决、综合、名次、状态、来源 |
+
+- 现场打分 zip 经 `tools/read_check_zip.py` 产出的 `检查明细_导入行.tsv` 与「检查明细」19 列**逐列对齐**（已回归验证）。
+- 「月度汇总」已填 2026-10 会计月 15 站真实柴汽吨数（来自中转簿），其余段留空待科室核算。华山该月仍标「正常营业」——关停自 2026-11-01 起，状态按会计月判定，不套当前状态。
+- 两表均冻结首行 + 前两列。照片经 `upload_attachment → create_float_images` 插入后，把 `attachment_id` 回填「照片附件ID」列；GitHub 仓库零照片。
