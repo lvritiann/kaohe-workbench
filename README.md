@@ -54,8 +54,9 @@
         ├─ photos/（压缩至长边 1280px）
         └─ manifest.json（站点、月份、检查人、扣分项、折算分）
    └─ 科室 python tools/read_check_zip.py <zip>
-        └─ inbox/检查表/<包名>/ + wps_upload_queue.json
-   └─ 导入金山「考核工作台数据源」→ 检查明细 + 照片附件列
+        └─ inbox/检查表/<包名>/：wps_upload_queue.json + kdocs_upload_payload.json + 检查明细_导入行.tsv
+   └─ TSV 粘进「检查明细」→ 金山连接器上传 payload 内照片拿 attachment_id
+        → create_float_images 插到对应行 → 回填队列
    └─ 科室汇总五段 → tools/build_rank.py → docs/data/rank.json → rank.html
 
 运营状态 status.html / status_push.bat / direct.html
@@ -114,7 +115,7 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 4. **照片没进 zip**：手机需允许相册/相机权限；单张压缩到 1280px，最多 3 张。
 5. **分数与定稿对不上**：确认用 56/28（不是 55.65/28.80）、月均在岗−4、会计月天数按实计、毛利含烟草、分母不是当日人数。
 6. **人效看板不刷新**：AirScript 末尾的 `main();` 不能删；看 `efficiency.json` 的 `updatedAt`；SW 对 `/data/` 是「先网络后缓存」，断网才用旧值。
-7. **照片进金山**：`python tools/read_check_zip.py <zip>` → `wps_upload_queue.json` → 导入「考核工作台数据源」检查明细；GitHub 不推照片。
+7. **照片进金山**：`python tools/read_check_zip.py <zip>` 一次产出三件 —— `检查明细_导入行.tsv`（粘贴）、`kdocs_upload_payload.json`（base64 直传清单）、`wps_upload_queue.json`（回填 attachmentId）。照片只进金山在线表，GitHub 零照片；在线表需先扩「照片文件名 / 照片附件ID」两列。
 8. **换打分人 / 改题目**：改对应 JSON → 推 GitHub → 升 sw 版本 → 页面强刷。
 9. **离线**：首次联网打开后自动缓存；断网可打分可导出，照片只存本地草稿。
 10. **停业站仍出现在榜上**：检查 `station_status.json` 的 `from`/`active` 与 `status.html` 签发的变更单是否已推送。
