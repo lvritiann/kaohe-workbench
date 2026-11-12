@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>运营状态直推客户端</title>
+<style>
+:root{--bg:#050a10;--s1:#0b151f;--s2:#101d29;--line:rgba(120,200,220,.14);--line2:rgba(120,220,235,.28);
+--tx:#e8f2f6;--tx2:#93a9b8;--tx3:#6b8296;--brand:#2fe0c8;--ok:#35d39a;--no:#ff6b5e;--na:#f2b544;
+--r:12px;--r2:16px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+background-image:repeating-linear-gradient(0deg,rgba(120,200,220,.05) 0 1px,transparent 1px 44px),repeating-linear-gradient(90deg,rgba(120,200,220,.05) 0 1px,transparent 1px 44px);
+mask-image:radial-gradient(circle at 50% 0%,#000,transparent 78%)}
+.wrap{max-width:680px;margin:0 auto;padding:0 16px 60px}
+header{position:sticky;top:0;z-index:20;padding:16px 16px 14px;background:linear-gradient(180deg,rgba(5,10,16,.97),rgba(5,10,16,.86));
+backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+header .in{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.eyebrow{font:11px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.2em;color:var(--brand);opacity:.8}
+h1{margin:2px 0 0;font-size:20px;font-weight:600;letter-spacing:-.02em}
+.sub{font-size:12px;color:var(--tx3)}
+.tag{display:inline-flex;align-items:center;font:11px/1 ui-monospace,Consolas,monospace;padding:5px 9px;border-radius:999px;
+border:1px solid var(--line2);background:var(--s1);margin-left:auto;white-space:nowrap}
+.tag.ok{color:var(--ok);border-color:rgba(53,211,154,.4);background:rgba(53,211,154,.1)}
+.tag.no{color:var(--no);border-color:rgba(255,107,94,.4);background:rgba(255,107,94,.1)}
+.card{margin-top:14px;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:var(--r2);padding:16px;
+box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+.sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:22px 0 8px;padding:0 2px}
+.sect b{font-size:15px;font-weight:600}
+.sect b::before{content:"";display:inline-block;width:3px;height:13px;background:var(--brand);border-radius:2px;margin-right:8px;vertical-align:-1px}
+.sect span{font:11px ui-monospace,Consolas,monospace;color:var(--tx3)}
+label{display:block;font:11px ui-monospace,Consolas,monospace;letter-spacing:.04em;color:var(--tx3);margin-bottom:6px;text-transform:uppercase}
+.field{margin-top:12px}.field:first-child{margin-top:0}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--line2);border-radius:var(--r);background:var(--s1);
+color:var(--tx);font:16px/1.4 inherit;appearance:none}
+input:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(47,224,200,.14)}
+select{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2393a9b8' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");
+background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+select option{background:#0b151f;color:#e8f2f6}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 18px;border-radius:var(--r);
+border:1px solid var(--line2);background:var(--s1);color:var(--tx);font-size:15px;font-weight:500;cursor:pointer}
+.btn:active{transform:scale(.985)}
+.btn.pri{background:linear-gradient(160deg,#2fe0c8,#0b8878);border-color:transparent;color:#04211d;font-weight:700}
+.btn.gho{background:transparent;color:var(--tx2)}
+.btn.full{width:100%}
+.btn+.btn{margin-top:10px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.kv{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:none}
+.kv>span{font-size:13px;color:var(--tx2);flex:0 0 auto}
+.kv>b{font:13px/1.5 ui-monospace,Consolas,monospace;font-weight:600;text-align:right;word-break:break-all}
+.kv.total>b{color:var(--brand);font-size:15px}
+.hint{font-size:12px;color:var(--tx3);line-height:1.7}
+.warn{margin-top:12px;padding:11px 13px;border-radius:var(--r);background:rgba(242,181,68,.09);
+border:1px solid rgba(242,181,68,.28);color:var(--na);font-size:12px;line-height:1.7}
+.err{margin-top:12px;padding:11px 13px;border-radius:var(--r);background:rgba(255,107,94,.09);
+border:1px solid rgba(255,107,94,.3);color:var(--no);font-size:12px;line-height:1.7}
+.okbox{margin-top:12px;padding:11px 13px;border-radius:var(--r);background:rgba(53,211,154,.09);
+border:1px solid rgba(53,211,154,.3);color:var(--ok);font-size:12px;line-height:1.7}
+.log{margin-top:12px;font:12px/1.8 ui-monospace,Consolas,monospace;color:var(--tx2);white-space:pre-wrap;word-break:break-all}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);background:#0b151f;
+border:1px solid var(--line2);color:var(--tx);padding:10px 18px;border-radius:999px;font-size:13px;
+opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:86vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%)}
+code{font-family:ui-monospace,Consolas,monospace;background:var(--s2);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+
+<header><div class="in">
+  <div><div class="eyebrow">DIRECT PUSH · 免安装客户端</div><h1>运营状态直推</h1>
+  <div class="sub">直写 GitHub 台账 · 不依赖任何服务器</div></div>
+  <span class="tag" id="cfgTag">未配置</span>
+</div></header>
+
+<div class="wrap">
+
+  <section class="card">
+    <div class="sect" style="margin-top:0"><b>连接配置</b><span>仅首次填写</span></div>
+    <div class="field"><label>GitHub 访问令牌</label>
+      <input type="password" id="tok" placeholder="github_pat_… 或 ghp_…" autocomplete="off"></div>
+    <div class="hint" style="margin-top:8px">令牌只保存在<b>本机浏览器</b>，不会写进本文件、不会上传。建议给每台客户端单独生成一个细粒度令牌（仅 <code>kaohe-workbench</code> 仓库 Contents 写权限），便于单独吊销。</div>
+    <button class="btn full" id="btnSave" style="margin-top:12px">保存并测试连接</button>
+    <button class="btn gho full" id="btnClear">清除本机令牌</button>
+    <div id="cfgOut"></div>
+  </section>
+
+  <section class="card" id="formCard">
+    <div class="sect" style="margin-top:0"><b>签发指令</b><span>一次一条</span></div>
+    <div class="field"><label>油站</label><select id="fStation"></select></div>
+    <div class="field"><label>状态</label><select id="fStatus">
+      <option value="temp_closed">临时关停（当月不出分、不排名）</option>
+      <option value="partial">部分停业（按实际经营天数折算）</option>
+      <option value="force_majeure">不可抗力（剔除受影响天数）</option>
+      <option value="reopened">复营（次月重新入榜）</option>
+      <option value="normal">恢复正常营业</option>
+    </select></div>
+    <div class="field"><label>起始日期</label><input type="date" id="fFrom"></div>
+    <div class="field"><label>结束日期（留空＝持续有效）</label><input type="date" id="fTo"></div>
+    <div class="field" id="daysField" style="display:none"><label>当月实际经营天数</label><input type="text" id="fDays" inputmode="numeric" placeholder="0–31"></div>
+    <div class="field"><label>原因 / 依据</label><input type="text" id="fReason" placeholder="如 站区改造临时关停"></div>
+    <div class="field"><label>签发人</label><input type="text" id="fOperator" placeholder="姓名或岗位"></div>
+    <div class="field"><label>佐证说明</label><input type="text" id="fEvidence" placeholder="可留空"></div>
+    <button class="btn pri full" id="btnPush" style="margin-top:18px">签发并推送</button>
+    <button class="btn gho full" id="btnCheck">仅校验（不改动）</button>
+    <div id="out"></div>
+  </section>
+
+  <div class="sect"><b>当前台账</b><span id="cnt"></span></div>
+  <div id="ledger"></div>
+
+  <div class="warn">
+    <b>关于令牌：</b>本文件不含任何密钥。但若把带令牌的浏览器给他人使用，对方即可签发指令——请给不同人分配不同令牌，
+    或在 <code>console/allow_ip.txt</code> 之外另行控制。多人同时提交时程序会自动重新拉取合并，不会互相覆盖。
+  </div>
+  <p class="hint" style="margin-top:14px">
+    本文件可双击打开（<code>file://</code>），也可放在任意静态托管上。数据直接写入 GitHub 仓库
+    <code>docs/data/station_status.json</code>，约 1 分钟后线上首页与排名榜生效。
+    全程不需要运行任何本地服务、不需要 git、不需要 Python。
+  </p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var OWNER='lvritiann', REPO='kaohe-workbench', PATH='docs/data/station_status.json', BRANCH='main';
+var API='https://api.github.com/repos/'+OWNER+'/'+REPO+'/contents/'+PATH;
+var STATIONS=['富平','汉中','秦岭','华山','白河','宁陕','韩城','南沙','旬阳','天汉水城','洋县','玉华宫','富县','照金','略阳'];
+var STATUS={normal:'正常营业',temp_closed:'临时关停',partial:'部分停业',force_majeure:'不可抗力',reopened:'复营'};
+var TOK_KEY='kaohe_direct_token';
+var LEDGER=null, SHA=null;
+function storeGet(k){try{var v=localStorage.getItem(k);if(v)return v;}catch(e){}try{return sessionStorage.getItem(k);}catch(e){return null;}}
+function storeSet(k,v){try{localStorage.setItem(k,v);return;}catch(e){}try{sessionStorage.setItem(k,v);}catch(e){}}
+function storeDel(k){try{localStorage.removeItem(k);}catch(e){}try{sessionStorage.removeItem(k);}catch(e){}}
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function two(n){return (n<10?'0':'')+n;}
+function today(){var d=new Date();return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate());}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2600);}
+
+function b64enc(str){
+  var bytes=new TextEncoder().encode(str),bin='';
+  for(var i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+  return btoa(bin);
+}
+function b64dec(b64){
+  var bin=atob(String(b64).replace(/\s/g,'')),arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(arr);
+}
+function hdr(){
+  return {'Authorization':'Bearer '+token(),'Accept':'application/vnd.github+json',
+    'Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'};
+}
+function token(){return storeGet(TOK_KEY)||'';}
+
+function apiGet(){
+  return fetch(API+'?ref='+BRANCH+'&t='+Date.now(),{headers:hdr(),cache:'no-store'})
+    .then(function(r){
+      if(r.status===401) throw new Error('令牌无效或已失效（401）');
+      if(r.status===404) throw new Error('远端台账文件不存在（404）');
+      if(!r.ok) throw new Error('读取失败 HTTP '+r.status);
+      return r.json();
+    }).then(function(d){
+      SHA=d.sha;
+      try{ LEDGER=JSON.parse(b64dec(d.content)); }catch(e){ throw new Error('台账内容解析失败'); }
+      return LEDGER;
+    });
+}
+
+function apiPut(obj,msg){
+  return fetch(API,{method:'PUT',headers:hdr(),body:JSON.stringify({
+    message:msg,content:b64enc(JSON.stringify(obj,null,2)),sha:SHA,branch:BRANCH
+  })}).then(function(r){
+    if(r.status===409||r.status===422) return {conflict:true,status:r.status};
+    if(!r.ok) return r.text().then(function(t){throw new Error('推送失败 HTTP '+r.status+' '+t.slice(0,120));});
+    return {conflict:false,status:r.status};
+  });
+}
+
+function validate(rec){
+  var e=[];
+  if(STATIONS.indexOf(rec.station)<0) e.push('站名不在 15 站名单内');
+  if(!STATUS[rec.status]) e.push('状态类型不合法');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(rec.from||'')) e.push('起始日期格式应为 YYYY-MM-DD');
+  if(rec.to && !/^\d{4}-\d{2}-\d{2}$/.test(rec.to)) e.push('结束日期格式错');
+  if(rec.to && rec.to<rec.from) e.push('结束日期早于起始日期');
+  if(!rec.reason) e.push('缺原因／依据');
+  if(!rec.operator) e.push('缺签发人');
+  if(rec.affectedDays!=null && (isNaN(rec.affectedDays)||rec.affectedDays<0||rec.affectedDays>31))
+    e.push('实际经营天数应在 0–31 之间');
+  return e;
+}
+
+function build(){
+  var d=new Date(), days=$('fDays').value.trim();
+  return {
+    id:'ST-'+d.getFullYear()+two(d.getMonth()+1)+two(d.getDate())+'-'+two(d.getHours())+two(d.getMinutes())+two(d.getSeconds()),
+    station:$('fStation').value,
+    status:$('fStatus').value,
+    from:$('fFrom').value,
+    to:$('fTo').value||null,
+    reason:$('fReason').value.trim(),
+    affectedDays:days===''?null:Number(days),
+    operator:$('fOperator').value.trim(),
+    setAt:d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())+' '+two(d.getHours())+':'+two(d.getMinutes()),
+    evidence:$('fEvidence').value.trim(),
+    active:true
+  };
+}
+
+function merge(rec){
+  var records=LEDGER.records||[];
+  if(records.some(function(r){return r.id===rec.id;})) return false;
+  var d0=new Date(rec.from+'T00:00:00'); d0.setDate(d0.getDate()-1);
+  var closing=d0.getFullYear()+'-'+two(d0.getMonth()+1)+'-'+two(d0.getDate());
+  records.forEach(function(old){
+    if(old.station===rec.station && old.active && !old.to && old.id!==rec.id) old.to=closing;
+  });
+  records.push(rec);
+  records.sort(function(a,b){return String(a.from||'').localeCompare(String(b.from||''))||String(a.setAt||'').localeCompare(String(b.setAt||''));});
+  LEDGER.records=records;
+  LEDGER.updatedAt=new Date().toISOString().slice(0,16).replace('T',' ');
+  LEDGER.issuer='计划经营科';
+  return true;
+}
+
+function renderLedger(){
+  var list=(LEDGER&&LEDGER.records||[]).slice().reverse();
+  $('cnt').textContent=list.length+' 条';
+  var h='';
+  list.forEach(function(r){
+    h+='<section class="card"><div class="kv"><span>油站</span><b>'+esc(r.station)+'</b></div>';
+    h+='<div class="kv"><span>状态</span><b>'+esc(STATUS[r.status]||r.status)+'</b></div>';
+    h+='<div class="kv"><span>期间</span><b>'+esc(r.from||'')+' 起'+(r.to?' 至 '+esc(r.to):'（持续）')+'</b></div>';
+    h+='<div class="kv"><span>原因</span><b>'+esc(r.reason||'')+'</b></div>';
+    h+='<div class="kv"><span>签发</span><b>'+esc(r.operator||'')+' · '+esc(r.setAt||'')+'</b></div></section>';
+  });
+  $('ledger').innerHTML=h||'<div class="card hint">台账为空或尚未读取</div>';
+}
+
+function cfgState(){
+  var ok=!!token();
+  $('cfgTag').textContent=ok?'已配置':'未配置';
+  $('cfgTag').className='tag '+(ok?'ok':'no');
+  $('btnPush').disabled=!ok;
+  if(ok) apiGet().then(renderLedger).catch(function(e){
+    $('cfgOut').innerHTML='<div class="err">连接失败：'+esc(e.message)+'</div>';
+  });
+}
+
+function log(lines,cls){
+  $('out').innerHTML='<div class="'+(cls||'okbox')+'">'+lines.map(function(x){return esc(x);}).join('<br>')+'</div>';
+}
+
+$('btnSave').addEventListener('click',function(){
+  var v=$('tok').value.trim();
+  if(!v){$('cfgOut').innerHTML='<div class="err">请先填入令牌</div>';return;}
+  storeSet(TOK_KEY,v);
+  $('tok').value='';
+  $('cfgOut').innerHTML='<div class="hint">正在测试连接…</div>';
+  apiGet().then(function(){
+    cfgState();
+    $('cfgOut').innerHTML='<div class="okbox">连接成功，已读到台账 '+((LEDGER.records||[]).length)+' 条。令牌仅存本机浏览器。</div>';
+    toast('连接成功');
+  }).catch(function(e){
+    $('cfgOut').innerHTML='<div class="err">'+esc(e.message)+'</div>';
+    cfgState();
+  });
+});
+$('btnClear').addEventListener('click',function(){
+  storeDel(TOK_KEY);
+  $('cfgOut').innerHTML='<div class="hint">已清除本机令牌。</div>';cfgState();toast('已清除');
+});
+$('fStatus').addEventListener('change',function(){
+  $('daysField').style.display=(this.value==='partial'||this.value==='force_majeure')?'block':'none';
+});
+$('btnCheck').addEventListener('click',function(){
+  var rec=build(),e=validate(rec);
+  if(e.length){log(e,'err');return;}
+  log(['校验通过：'+rec.station+' / '+STATUS[rec.status]+' / '+rec.from+' 起',
+       '编号 '+rec.id,'未改动远端台账（仅校验）']);
+});
+$('btnPush').addEventListener('click',function(){
+  if(!token()){toast('请先配置令牌');return;}
+  var rec=build(),e=validate(rec);
+  if(e.length){log(e,'err');return;}
+  storeSet('kaohe_direct_operator',rec.operator);
+  $('btnPush').disabled=true;
+  $('out').innerHTML='<div class="hint">处理中：读取台账 → 合并 → 推送（冲突会自动重试）…</div>';
+  var steps=[];
+  function attempt(n){
+    apiGet().then(function(){
+      steps.push('第 '+n+' 次：读到远端台账，sha '+String(SHA).slice(0,8));
+      merge(rec);
+      return apiPut(LEDGER,'chore(status): '+rec.station+' '+rec.status+' '+rec.from);
+    }).then(function(res){
+      if(res.conflict){
+        steps.push('检测到并发修改，重新拉取合并');
+        if(n<3) return attempt(n+1);
+        throw new Error('并发冲突，已重试 3 次，请稍后再试');
+      }
+      steps.push('推送成功 HTTP '+res.status);
+      steps.push('约 1 分钟后线上首页与排名榜生效');
+      log(steps);
+      toast('签发成功');
+      $('btnPush').disabled=false;
+      renderLedger();
+    }).catch(function(err){
+      steps.push('失败：'+err.message);
+      log(steps,'err');
+      $('btnPush').disabled=false;
+    });
+  }
+  attempt(1);
+});
+
+(function init(){
+  var sel=$('fStation');
+  STATIONS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;sel.appendChild(o);});
+  $('fFrom').value=today();
+  $('fOperator').value=storeGet('kaohe_direct_operator')||'';
+  cfgState();
+})();
+</script>
+</body>
+</html>
