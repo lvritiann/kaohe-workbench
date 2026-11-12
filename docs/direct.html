@@ -141,6 +141,13 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){retur
 function two(n){return (n<10?'0':'')+n;}
 function today(){var d=new Date();return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate());}
 function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2600);}
+function netErr(e){
+  var m=e&&e.message?e.message:String(e);
+  if(location.protocol==='file:' && /Failed to fetch|NetworkError|CORS|TypeError/i.test(m)){
+    m+='  ｜ 当前是 file:// 打开，个别浏览器会拦截跨域。请改用 Chrome / Edge，或改用线上版 direct.html（需填一次令牌）。';
+  }
+  return m;
+}
 
 function b64enc(str){
   var bytes=new TextEncoder().encode(str),bin='';
@@ -268,7 +275,7 @@ $('btnSave').addEventListener('click',function(){
     $('cfgOut').innerHTML='<div class="okbox">连接成功，已读到台账 '+((LEDGER.records||[]).length)+' 条。令牌仅存本机浏览器。</div>';
     toast('连接成功');
   }).catch(function(e){
-    $('cfgOut').innerHTML='<div class="err">'+esc(e.message)+'</div>';
+    $('cfgOut').innerHTML='<div class="err">'+esc(netErr(e))+'</div>';
     cfgState();
   });
 });
@@ -311,7 +318,7 @@ $('btnPush').addEventListener('click',function(){
       $('btnPush').disabled=false;
       renderLedger();
     }).catch(function(err){
-      steps.push('失败：'+err.message);
+      steps.push('失败：'+netErr(err));
       log(steps,'err');
       $('btnPush').disabled=false;
     });
