@@ -1,475 +1,481 @@
-/* 打分页主逻辑 */
+/* 现场检查打分 V5
+   依据《目标责任考核方案》V1.0：运营检查 100 分制 → 折算 20 分；6 项一票否决。
+   交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
+   导出：检查表 Excel ＋ 照片包打成一个 zip；照片只进金山在线表，GitHub 不存。
+*/
 (function () {
-  var C = window.CFG;
-  var E = window.Engine;
-  var S = window.Store;
-  var UI = window.UI;
+  var C = window.CFG, E = window.Engine, S = window.Store;
 
-  var DATA = null;
+  var DATA = null, INS = null, USER = null;
   var S_ = {
     station: localStorage.getItem('lastStation') || '',
-    month: '',
-    inspector: localStorage.getItem('lastInspector') || '',
-    items: {},
-    veto: {},
-    notes: {}
+    month: '', inspector: '', items: {}, veto: {}, notes: {}, photos: {}
   };
 
   var $ = function (id) { return document.getElementById(id); };
   var esc = UI.esc;
-
-  /* xlsx 库按需加载：881KB，不能拖慢首屏 */
-  var xlsxPromise = null;
-  function loadXLSX() {
-    if (window.XLSX) return Promise.resolve(window.XLSX);
-    if (xlsxPromise) return xlsxPromise;
-    xlsxPromise = new Promise(function (resolve, reject) {
-      var sc = document.createElement('script');
-      sc.src = 'assets/vendor/xlsx.full.min.js';
-      sc.onload = function () { resolve(window.XLSX); };
-      sc.onerror = function () { xlsxPromise = null; reject(new Error('生成库加载失败，请联网后重试')); };
-      document.head.appendChild(sc);
-    });
-    return xlsxPromise;
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function nowMonth() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+  function fmt(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 2400);
   }
 
-  function nowMonth() {
-    var d = new Date();
-    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
-  }
-
-  var CHEV = '<svg class="cat__chev" width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M6 9l6 6 6-6"/></svg>';
+  /* ---------------- 登录 ---------------- */
 
   function boot() {
     S_.month = nowMonth();
-    fetch('data/items.json', { cache: 'no-cache' })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        DATA = j;
-        localStorage.setItem('itemsCache', JSON.stringify(j));
-        render();
-      })
-      .catch(function () {
-        var cached = localStorage.getItem('itemsCache');
-        if (cached) { DATA = JSON.parse(cached); render(); UI.toast('离线：使用本机缓存题目'); }
-        else {
-          $('app').innerHTML = '<div class="err">题目数据加载失败，且本机无缓存。请联网后再打开一次。</div>';
-        }
-      });
+    Promise.all([
+      fetch('data/items.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }),
+      fetch(C.inspectorsFile, { cache: 'no-cache' }).then(function (r) { return r.json(); })
+    ]).then(function (res) {
+      DATA = res[0]; INS = res[1];
+      localStorage.setItem('itemsCache', JSON.stringify(DATA));
+      try { USER = JSON.parse(sessionStorage.getItem('kaohe_user') || 'null'); } catch (e) { USER = null; }
+      if (USER && (INS.inspectors || []).some(function (x) { return x.id === USER.id; })) return enterApp();
+      renderLogin();
+    }).catch(function () {
+      var c = localStorage.getItem('itemsCache');
+      if (!c) { $('app').innerHTML = '<div class="err">题目与名单加载失败，请联网后再打开一次。</div>'; return; }
+      DATA = JSON.parse(c);
+      INS = { inspectors: [] };
+      renderLogin();
+    });
   }
 
-  function ringHtml() {
-    var r = 26, c = 2 * Math.PI * r;
-    return '<div class="ring">' +
-      '<svg width="62" height="62" viewBox="0 0 62 62">' +
-      '<circle class="ring__bg" cx="31" cy="31" r="' + r + '" stroke-width="5"/>' +
-      '<circle class="ring__fg" id="ringFg" cx="31" cy="31" r="' + r + '" stroke-width="5" ' +
-      'stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + c.toFixed(1) + '"/>' +
-      '</svg><div class="ring__txt" id="ringTxt">0%</div></div>';
+  function renderLogin() {
+    $('actionbar').style.display = 'none';
+    $('subInfo').textContent = '请选择打分人';
+    var h = '<div class="login-wrap"><div class="card">';
+    h += '<div class="login-logo">✓</div>';
+    h += '<h2 style="text-align:center;font-size:18px;margin-bottom:4px">现场检查打分</h2>';
+    h += '<p class="hint" style="text-align:center;margin-bottom:18px">选择自己的名字，输入个人口令</p>';
+    h += '<div class="field"><label>打分人</label><select id="lgName"><option value="">请选择</option>';
+    (INS.inspectors || []).forEach(function (x) {
+      h += '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>';
+    });
+    h += '</select></div>';
+    h += '<div class="field"><label>个人口令</label><input type="password" id="lgPass" placeholder="输入口令" autocomplete="off"></div>';
+    h += '<button class="btn btn--primary btn--block" id="lgGo" style="margin-top:18px">登录</button>';
+    h += '<p class="hint" style="margin-top:12px">登录后每条扣分记录自动署名。名单与口令在 <b>data/inspectors.json</b> 里维护。</p>';
+    h += '</div></div>';
+    $('app').innerHTML = h;
+
+    $('lgGo').addEventListener('click', doLogin);
+    $('lgPass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
   }
+
+  function doLogin() {
+    var id = $('lgName').value;
+    var pass = ($('lgPass').value || '').trim();
+    var who = (INS.inspectors || []).filter(function (x) { return x.id === id; })[0];
+    if (!who) { toast('请选择打分人'); return; }
+    if (pass !== String(who.pass)) { toast('口令不正确'); return; }
+    USER = { id: who.id, name: who.name };
+    sessionStorage.setItem('kaohe_user', JSON.stringify(USER));
+    enterApp();
+  }
+
+  function enterApp() {
+    S_.inspector = USER.name;
+    $('subInfo').textContent = USER.name + ' · ' + (S_.month || '');
+    render();
+  }
+
+  /* ---------------- 主界面 ---------------- */
 
   function render() {
+    /* 默认全部符合、全部否决合格 */
+    DATA.items.forEach(function (it) {
+      if (!S_.items[it.no]) S_.items[it.no] = 'ok';
+    });
+    DATA.veto.forEach(function (v) { if (!S_.veto[v.no]) S_.veto[v.no] = 'ok'; });
+
     var h = '';
 
-    h += '<section class="card"><div class="meter">' + ringHtml();
-    h += '<div class="meter__main">';
-    h += '<div class="meter__num"><span id="meterNum">—</span><small>分</small> <span class="tag" id="meterGrade">待评</span></div>';
-    h += '<div class="meter__sub" id="meterSub">已判 0 / ' + DATA.items.length + ' 项</div>';
-    h += '</div></div>';
-    h += '<div class="chips">';
-    h += '<div class="chip chip--ok"><div class="chip__n" id="chipOk">0</div><div class="chip__l">符合</div></div>';
-    h += '<div class="chip chip--no"><div class="chip__n" id="chipNo">0</div><div class="chip__l">不符合</div></div>';
-    h += '<div class="chip chip--na"><div class="chip__n" id="chipNa">0</div><div class="chip__l">不适用</div></div>';
-    h += '<div class="chip"><div class="chip__n" id="chipLeft">' + DATA.items.length + '</div><div class="chip__l">未判</div></div>';
-    h += '</div></section>';
-
-    h += '<section class="card"><div class="sect__head" style="margin-bottom:10px"><span class="sect__title">本次检查</span></div>';
+    h += '<section class="card" style="margin-top:16px">';
+    h += '<div class="warn" style="margin:0 0 12px">73 项<b>默认全部符合</b>；只有发现问题才点该项「扣分」，填原因（必填）、可附照片。</div>';
     h += '<div class="field"><label>油站</label><select id="fStation"><option value="">请选择油站</option>';
     C.stations.forEach(function (s) {
       h += '<option value="' + esc(s) + '"' + (s === S_.station ? ' selected' : '') + '>' + esc(s) + '</option>';
     });
     h += '</select></div>';
     h += '<div class="field"><label>检查月份</label><input type="month" id="fMonth" value="' + S_.month + '"></div>';
-    h += '<div class="field"><label>检查人</label><input type="text" id="fInspector" placeholder="填写姓名" value="' + esc(S_.inspector) + '"></div>';
+    h += '<div class="field"><label>检查人</label><input type="text" value="' + esc(USER.name) + '" disabled></div>';
     h += '</section>';
 
-    h += '<section class="cat veto" id="cat-veto">';
-    h += '<div class="cat__head" data-cat="veto">';
-    h += '<span class="cat__idx">!</span>';
-    h += '<div class="cat__main"><span class="cat__name">一票否决</span>';
+    /* 一票否决 */
+    h += '<section class="cat veto" id="cat-veto"><div class="cat__head" data-cat="veto">';
+    h += '<span class="cat__idx">!</span><div class="cat__main"><span class="cat__name">一票否决（默认合格）</span>';
     h += '<div class="cat__bar"><i id="catbar-veto"></i></div></div>';
-    h += '<span class="cat__meta">6 项<b id="catmeta-veto">0/6</b></span>' + CHEV + '</div>';
-    h += '<div class="cat__body">';
-    h += '<div style="padding:12px 16px 0"><div class="hint">任一项判定不合格，本单位当期综合得分记 0 分、排名垫底、当年不得评优。</div></div>';
+    h += '<span class="cat__meta">6 项<b id="catmeta-veto">0/6</b></span>' + CHEV + '</div><div class="cat__body">';
     DATA.veto.forEach(function (v) {
       h += '<div class="veto-item" id="veto-' + v.no + '">';
-      h += '<span class="veto-flag">否决 ' + v.no + '</span>';
-      h += '<div class="item__top"><span class="item__name">' + esc(v.name) + '</span></div>';
+      h += '<div class="veto-line"><span class="veto-flag">否决 ' + v.no + '</span><span class="item__name" style="flex:1">' + esc(v.name) + '</span>';
+      h += '<button class="mini-btn' + (S_.veto[v.no] === 'no' ? ' on' : '') + '" data-veto="' + v.no + '">不合格</button></div>';
       h += '<div class="item__content">' + esc(v.content) + '</div>';
       h += '<details class="more"><summary>检查方法</summary><div class="std">' + esc(v.method) + '</div></details>';
-      h += '<div class="seg" data-kind="veto" data-no="' + v.no + '">';
-      h += '<button type="button" data-v="ok">合格</button>';
-      h += '<button type="button" data-v="no">不合格</button>';
-      h += '<button type="button" data-v="">待判</button>';
-      h += '</div></div>';
+      h += '<div id="vbox-' + v.no + '"></div></div>';
     });
     h += '</div></section>';
 
     h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">运营检查</span>' +
-      '<span class="sect__hint">73 项 · 100 分</span></div>';
+      '<span class="sect__hint">73 项 · 100 分 → 20 分</span></div>';
 
     DATA.categories.forEach(function (cat, ci) {
       var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
-      var idx = ci + 1;
-      h += '<section class="cat" id="cat-' + ci + '">';
-      h += '<div class="cat__head" data-cat="' + ci + '">';
-      h += '<span class="cat__idx">' + (idx < 10 ? '0' + idx : idx) + '</span>';
-      h += '<div class="cat__main"><span class="cat__name">' +
-        esc(cat.title.replace(/^[一二三四五六七八九十]+、/, '')) + '</span>';
+      h += '<section class="cat" id="cat-' + ci + '"><div class="cat__head" data-cat="' + ci + '">';
+      h += '<span class="cat__idx">' + pad(ci + 1) + '</span>';
+      h += '<div class="cat__main"><span class="cat__name">' + esc(cat.title.replace(/^[一二三四五六七八九十]+、/, '')) + '</span>';
       h += '<div class="cat__bar"><i id="catbar-' + ci + '"></i></div></div>';
-      h += '<span class="cat__meta">' + cat.score + ' 分<b id="catmeta-' + ci + '">0/' + list.length + '</b></span>';
-      h += CHEV + '</div><div class="cat__body">';
+      h += '<span class="cat__meta">' + cat.score + ' 分<b id="catmeta-' + ci + '">0/' + list.length + '</b></span>' + CHEV + '</div>';
+      h += '<div class="cat__body">';
       list.forEach(function (it) { h += itemHtml(it); });
       h += '</div></section>';
     });
 
     $('app').innerHTML = h;
+    $('actionbar').style.display = 'block';
     bind();
     loadDraft();
-    refreshAll();
+    refresh();
   }
 
+  var CHEV = '<svg class="cat__chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>';
+
   function itemHtml(it) {
-    var h = '';
-    h += '<div class="item" id="item-' + it.no + '">';
-    h += '<div class="item__top"><span class="item__no">' + it.no + '</span>';
-    h += '<span class="item__name">' + esc(it.name) + '</span>';
-    h += '<span class="item__score">' + it.score + '分</span></div>';
+    var h = '<div class="item" id="item-' + it.no + '"><div class="item__top"><span class="item__no">' + it.no + '</span>';
+    h += '<span class="item__name">' + esc(it.name) + '</span><span class="item__score">' + it.score + '分</span></div>';
     h += '<div class="item__content">' + esc(it.content) + '</div>';
-    h += '<details class="more"><summary>判定标准 · 检查方法</summary>';
-    h += '<div class="std"><b>判定</b>　' + esc(it.std) + '</div>';
+    h += '<details class="more"><summary>判定标准 · 检查方法</summary><div class="std"><b>判定</b>　' + esc(it.std) + '</div>';
     h += '<div class="std"><b>方法</b>　' + esc(it.method) + '</div></details>';
-    h += '<div class="seg" data-kind="item" data-no="' + it.no + '">';
-    h += '<button type="button" data-v="ok">符合</button>';
-    h += '<button type="button" data-v="no">不符合</button>';
-    h += '<button type="button" data-v="na">不适用</button>';
-    h += '</div>';
-    h += '<div class="note" id="note-' + it.no + '" style="display:none">';
-    h += '<input type="text" placeholder="问题说明 / NA 原因（必填）" data-note="' + it.no + '">';
-    h += '</div></div>';
+    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:10px">';
+    h += '<span class="item-state" id="state-' + it.no + '">符合 · 得 ' + it.score + ' 分</span>';
+    h += '<button class="mini-btn" data-deduct="' + it.no + '">扣分</button>';
+    h += '<button class="mini-btn" data-na="' + it.no + '">不适用</button>';
+    h += '</div><div id="box-' + it.no + '"></div></div>';
     return h;
   }
 
+  /* ---------------- 扣分框 ---------------- */
+
+  function deductHtml(no, isVeto) {
+    var key = isVeto ? 'v' + no : no;
+    var a = isVeto ? S_.veto[no] : S_.items[no];
+    if (a !== 'no' && a !== 'na') return '';
+    var notes = S_.notes[key] || {};
+    var photos = S_.photos[key] || [];
+    var h = '<div class="deduct">';
+    if (a === 'na') {
+      h += '<div class="field" style="margin-top:0"><label>不适用原因</label><input type="text" data-note="' + key + '" placeholder="如 本站无便利店" value="' + esc(notes.reason || '') + '"></div>';
+      h += '<p class="hint" style="margin-top:4px">NA 项不计入 100 分，按有效项折算。</p></div>';
+      return h;
+    }
+    h += '<div class="field" style="margin-top:0"><label>问题说明（必填）</label>';
+    h += '<input type="text" data-note="' + key + '" placeholder="写清哪里不合格" value="' + esc(notes.reason || '') + '">';
+    h += '</div>';
+    h += '<div class="field"><label>佐证照片（可选，最多 3 张）</label>';
+    h += '<input type="file" accept="image/*" multiple data-photo="' + key + '" style="font-size:13px;padding:8px">';
+    h += '<div class="photo-row" id="photos-' + key + '">';
+    photos.forEach(function (p, i) {
+      h += '<img class="thumb" src="' + p.data + '" data-delphoto="' + key + '|' + i + '" title="点击删除">';
+    });
+    h += '</div></div>';
+    h += '<button class="mini-btn" data-undo="' + (isVeto ? 'v' : 'i') + '|' + no + '">撤销扣分</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function compress(file, cb) {
+    var fr = new FileReader();
+    fr.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1280, w = img.width, h = img.height;
+        if (w > max || h > max) {
+          var k = max / Math.max(w, h);
+          w = Math.round(w * k); h = Math.round(h * k);
+        }
+        var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        cb(cv.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = function () { toast('图片读取失败'); };
+      img.src = e.target.result;
+    };
+    fr.readAsDataURL(file);
+  }
+
+  /* ---------------- 事件 ---------------- */
+
   function bind() {
     $('fStation').addEventListener('change', function () {
-      S_.station = this.value;
-      localStorage.setItem('lastStation', S_.station);
-      loadDraft(); refreshAll();
+      S_.station = this.value; localStorage.setItem('lastStation', S_.station);
+      loadDraft(); refresh();
     });
-    $('fMonth').addEventListener('change', function () {
-      S_.month = this.value || nowMonth();
-      loadDraft(); refreshAll();
-    });
-    $('fInspector').addEventListener('input', function () {
-      S_.inspector = this.value.trim();
-      localStorage.setItem('lastInspector', S_.inspector);
-      scheduleSave();
-    });
+    $('fMonth').addEventListener('change', function () { S_.month = this.value || nowMonth(); loadDraft(); refresh(); });
 
     $('app').addEventListener('click', function (e) {
       var head = e.target.closest('.cat__head');
       if (head) {
-        var key = head.getAttribute('data-cat');
-        var box = document.getElementById('cat-' + key);
+        var box = $('cat-' + head.getAttribute('data-cat'));
         if (box) box.classList.toggle('open');
         return;
       }
-      var btn = e.target.closest('.seg button');
-      if (!btn) return;
-      var seg = btn.parentNode;
-      var kind = seg.getAttribute('data-kind');
-      var no = +seg.getAttribute('data-no');
-      var val = btn.getAttribute('data-v');
-      if (kind === 'veto') {
-        if (val) S_.veto[no] = val; else delete S_.veto[no];
-      } else {
-        if (val) S_.items[no] = val; else delete S_.items[no];
+      var t = e.target;
+
+      var dv = t.getAttribute && t.getAttribute('data-veto');
+      if (dv) {
+        S_.veto[dv] = S_.veto[dv] === 'no' ? 'ok' : 'no';
+        S_.notes['v' + dv] = { reason: '' };
+        refresh(); scheduleSave(); return;
       }
-      paintSeg(seg, val);
-      if (kind === 'item') toggleNote(no, val);
-      refreshAll();
-      scheduleSave();
+      var dd = t.getAttribute && t.getAttribute('data-deduct');
+      if (dd) {
+        S_.items[dd] = S_.items[dd] === 'no' ? 'ok' : 'no';
+        if (S_.items[dd] === 'no') S_.notes[dd] = { reason: '' };
+        refresh(); scheduleSave(); return;
+      }
+      var dn = t.getAttribute && t.getAttribute('data-na');
+      if (dn) {
+        S_.items[dn] = S_.items[dn] === 'na' ? 'ok' : 'na';
+        refresh(); scheduleSave(); return;
+      }
+      var du = t.getAttribute && t.getAttribute('data-undo');
+      if (du) {
+        var p = du.split('|');
+        if (p[0] === 'v') S_.veto[p[1]] = 'ok';
+        else S_.items[p[1]] = 'ok';
+        refresh(); scheduleSave(); return;
+      }
+      var dp = t.getAttribute && t.getAttribute('data-delphoto');
+      if (dp) {
+        var q = dp.split('|');
+        S_.photos[q[0]].splice(Number(q[1]), 1);
+        refresh(); scheduleSave(); return;
+      }
     });
 
     $('app').addEventListener('input', function (e) {
-      var t = e.target.getAttribute && e.target.getAttribute('data-note');
-      if (t) { S_.notes[+t] = e.target.value; scheduleSave(); }
+      var k = e.target.getAttribute && e.target.getAttribute('data-note');
+      if (k) { S_.notes[k] = { reason: e.target.value }; scheduleSave(); }
+    });
+
+    $('app').addEventListener('change', function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute('data-photo');
+      if (!k || !e.target.files) return;
+      var files = Array.prototype.slice.call(e.target.files, 0, 3);
+      if (!S_.photos[k]) S_.photos[k] = [];
+      files.forEach(function (f) {
+        compress(f, function (data) {
+          S_.photos[k].push({ name: f.name, data: data });
+          refresh(); scheduleSave();
+        });
+      });
+      e.target.value = '';
     });
 
     $('btnSubmit').addEventListener('click', onSubmit);
   }
 
-  function paintSeg(seg, val) {
-    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
-      b.className = '';
-      var v = b.getAttribute('data-v');
-      if (v === val && val) b.className = 'on-' + v;
-    });
-    var box = seg.closest('.veto-item, .item');
-    if (box && box.classList.contains('veto-item')) box.classList.toggle('fail', val === 'no');
-  }
-
-  function toggleNote(no, val) {
-    var box = $('note-' + no);
-    if (!box) return;
-    var need = (val === 'no' || val === 'na');
-    box.style.display = need ? 'block' : 'none';
-    if (!need) { box.querySelector('input').value = ''; delete S_.notes[no]; }
-  }
-
-  function decided() { return Object.keys(S_.items).length; }
-
-  function refreshAll() {
-    var r = E.inspectResult(DATA, S_);
-    var v = E.vetoResult(DATA, S_);
-    var total = DATA.items.length + DATA.veto.length;
-    var doneAll = decided() + (DATA.veto.length - v.undecided);
-    var pct = Math.round(doneAll / total * 100);
-
-    var c = 2 * Math.PI * 26;
-    var fg = $('ringFg');
-    if (fg) fg.setAttribute('stroke-dashoffset', (c * (1 - doneAll / total)).toFixed(1));
-    if ($('ringTxt')) $('ringTxt').textContent = pct + '%';
-
-    DATA.categories.forEach(function (cat, ci) {
-      var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
-      var done = list.filter(function (i) { return S_.items[i.no]; }).length;
-      var m = $('catmeta-' + ci);
-      if (m) m.textContent = done + '/' + list.length;
-      var bar = $('catbar-' + ci);
-      if (bar) bar.style.width = (list.length ? done / list.length * 100 : 0) + '%';
-      var box = $('cat-' + ci);
-      if (box) box.classList.toggle('done', done === list.length);
-    });
-    var vm = $('catmeta-veto');
-    if (vm) vm.textContent = (DATA.veto.length - v.undecided) + '/' + DATA.veto.length;
-    var vbar = $('catbar-veto');
-    if (vbar) vbar.style.width = ((DATA.veto.length - v.undecided) / DATA.veto.length * 100) + '%';
-
-    DATA.items.forEach(function (it) {
-      var seg = document.querySelector('.seg[data-kind="item"][data-no="' + it.no + '"]');
-      if (seg) { paintSeg(seg, S_.items[it.no] || ''); if (S_.items[it.no]) toggleNote(it.no, S_.items[it.no]); }
-      var box = $('item-' + it.no);
-      if (box) {
-        var a = S_.items[it.no];
-        box.className = 'item' + (a ? ' state-' + a : '');
-      }
-    });
-    DATA.veto.forEach(function (vv) {
-      var seg = document.querySelector('.seg[data-kind="veto"][data-no="' + vv.no + '"]');
-      if (seg) paintSeg(seg, S_.veto[vv.no] || '');
-    });
-
-    var has = decided() > 0;
-    if ($('meterNum')) $('meterNum').textContent = has ? r.converted.toFixed(1) : '—';
-    if ($('barScore')) $('barScore').textContent = has ? r.converted.toFixed(1) : '—';
-    var g = $('meterGrade');
-    if (g) {
-      g.textContent = has ? r.grade : '待评';
-      g.className = 'tag ' + (r.grade === '优秀' ? 'ok' : r.grade === '不合格' ? 'no' : '');
-    }
-    var sub = '已判 ' + decided() + ' / ' + DATA.items.length +
-      (r.naCount ? ' · NA ' + r.naCount : '') + (r.noCount ? ' · 不符 ' + r.noCount : '');
-    if ($('meterSub')) $('meterSub').textContent = sub;
-    if ($('barSub')) $('barSub').textContent = sub;
-
-    var okN = 0, noN = 0, naN = 0;
+  function refresh() {
+    /* 大类进度 + 扣分数 */
+    var deducted = 0, naCount = 0;
     DATA.items.forEach(function (it) {
       var a = S_.items[it.no];
-      if (a === 'ok') okN++; else if (a === 'no') noN++; else if (a === 'na') naN++;
+      var st = $('state-' + it.no);
+      var db = document.querySelector('[data-deduct="' + it.no + '"]');
+      if (db) db.textContent = a === 'no' ? '撤销' : '扣分';
+      if (st) {
+        st.className = 'item-state' + (a === 'no' ? ' no' : '');
+        st.textContent = a === 'no' ? '不符合 · 0 分' : a === 'na' ? '不适用' : '符合 · 得 ' + it.score + ' 分';
+        if (a === 'no') deducted++;
+        if (a === 'na') naCount++;
+      }
+      var box = $('box-' + it.no);
+      if (box) box.innerHTML = deductHtml(it.no, false);
+      var item = $('item-' + it.no);
+      if (item) item.className = 'item' + (a === 'no' ? ' state-no' : a === 'na' ? ' state-na' : '');
     });
-    if ($('chipOk')) $('chipOk').textContent = okN;
-    if ($('chipNo')) $('chipNo').textContent = noN;
-    if ($('chipNa')) $('chipNa').textContent = naN;
-    if ($('chipLeft')) $('chipLeft').textContent = DATA.items.length - okN - noN - naN;
+    DATA.veto.forEach(function (v) {
+      var b = $('vbox-' + v.no);
+      if (b) b.innerHTML = deductHtml(v.no, true);
+      var vi = $('veto-' + v.no);
+      if (vi) vi.classList.toggle('fail', S_.veto[v.no] === 'no');
+      var btn = document.querySelector('[data-veto="' + v.no + '"]');
+      if (btn) btn.classList.toggle('on', S_.veto[v.no] === 'no');
+    });
+    DATA.categories.forEach(function (cat, ci) {
+      var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
+      var n = list.filter(function (i) { return S_.items[i.no] === 'no'; }).length;
+      var m = $('catmeta-' + ci); if (m) m.textContent = n + '/' + list.length + ' 扣分';
+      var bar = $('catbar-' + ci); if (bar) bar.style.width = (n / list.length * 100) + '%';
+      var box = $('cat-' + ci); if (box) box.classList.toggle('done', n > 0);
+    });
+    var vn = DATA.veto.filter(function (v) { return S_.veto[v.no] === 'no'; }).length;
+    var vm = $('catmeta-veto'); if (vm) vm.textContent = vn + '/6';
+    var vb = $('catbar-veto'); if (vb) vb.style.width = (vn / 6 * 100) + '%';
 
-    var si = $('subInfo');
-    if (si) si.textContent = (S_.station || '未选油站') + ' · ' + (S_.month || '') +
-      (v.vetoed ? ' · 已触发否决' : '');
+    var res = E.inspectResult(DATA, S_);
+    $('barScore').textContent = res.converted.toFixed(2);
+    $('barSub').textContent = '→ 运营段 ' + res.score.toFixed(2) + '/20 · 已扣 ' + deducted + ' 项' +
+      (naCount ? ' · NA ' + naCount + ' 项' : '') + (vn ? ' · 否决 ' + vn : '');
+    $('subInfo').textContent = (USER ? USER.name : '') + ' · ' + (S_.station || '未选站') + ' · ' + S_.month;
   }
 
+  /* ---------------- 草稿 ---------------- */
+
   var saveTimer = null;
-  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 400); }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 500); }
   function doSave() {
     if (!S_.station || !S_.month) return;
     S.saveDraft(S_.station + '|' + S_.month, {
       station: S_.station, month: S_.month, inspector: S_.inspector,
-      items: S_.items, veto: S_.veto, notes: S_.notes
+      items: S_.items, veto: S_.veto, notes: S_.notes, photos: S_.photos
     });
   }
   function loadDraft() {
-    S_.items = {}; S_.veto = {}; S_.notes = {};
     if (!S_.station || !S_.month) return;
     S.getDraft(S_.station + '|' + S_.month).then(function (d) {
       if (!d) return;
-      S_.items = d.items || {};
-      S_.veto = d.veto || {};
-      S_.notes = d.notes || {};
-      if (d.inspector && !S_.inspector) { S_.inspector = d.inspector; if ($('fInspector')) $('fInspector').value = d.inspector; }
-      DATA.items.forEach(function (it) {
-        if (S_.notes[it.no]) {
-          var box = $('note-' + it.no);
-          if (box) { box.style.display = 'block'; box.querySelector('input').value = S_.notes[it.no]; }
-        }
-      });
-      refreshAll();
-      UI.toast('已恢复上次草稿');
+      S_.items = d.items || {}; S_.veto = d.veto || {}; S_.notes = d.notes || {}; S_.photos = d.photos || {};
+      DATA.items.forEach(function (it) { if (!S_.items[it.no]) S_.items[it.no] = 'ok'; });
+      DATA.veto.forEach(function (v) { if (!S_.veto[v.no]) S_.veto[v.no] = 'ok'; });
+      refresh(); toast('已恢复上次草稿');
     }).catch(function () { });
   }
 
+  /* ---------------- 提交 ---------------- */
+
   function onSubmit() {
-    var r = E.inspectResult(DATA, S_);
-    var v = E.vetoResult(DATA, S_);
     var problems = [];
-
     if (!S_.station) problems.push('未选择油站');
-    if (!S_.month) problems.push('未选择检查月份');
-    if (!S_.inspector) problems.push('未填写检查人');
-    if (r.undecided > 0) problems.push('还有 ' + r.undecided + ' 个判定项未判');
-    if (v.undecided > 0) problems.push('还有 ' + v.undecided + ' 个一票否决项未判');
-
     var missing = [];
     DATA.items.forEach(function (it) {
-      var a = S_.items[it.no];
-      if ((a === 'no' || a === 'na') && !(S_.notes[it.no] || '').trim()) missing.push(it.no);
+      if (S_.items[it.no] === 'no' && !(S_.notes[it.no] && S_.notes[it.no].reason.trim())) missing.push(it.no);
     });
-    if (missing.length) problems.push('第 ' + missing.join('、') + ' 项不符/不适用但未写说明');
-
+    DATA.veto.forEach(function (v) {
+      if (S_.veto[v.no] === 'no' && !(S_.notes['v' + v.no] && S_.notes['v' + v.no].reason.trim())) missing.push('否决' + v.no);
+    });
+    if (missing.length) problems.push('以下扣分项未填原因：' + missing.join('、'));
     if (problems.length) {
-      showSheet('<div class="sheet__grip"></div><h3>还不能提交</h3><div class="err">' +
-        problems.map(esc).join('<br>') + '</div>' +
+      showSheet('<div class="sheet__grip"></div><h3>还不能提交</h3><div class="err">' + problems.map(esc).join('<br>') + '</div>' +
         '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回填写</button></div>');
       return;
     }
 
+    var res = E.inspectResult(DATA, S_);
+    var veto = E.vetoResult(DATA, S_);
     var b = '<div class="sheet__grip"></div><h3>提交前确认</h3>';
     b += '<div class="kv"><span>油站 / 月份</span><b>' + esc(S_.station) + ' · ' + esc(S_.month) + '</b></div>';
-    b += '<div class="kv"><span>检查人</span><b>' + esc(S_.inspector) + '</b></div>';
-    b += '<div class="kv"><span>实得 / 有效满分</span><b>' + r.raw + ' / ' + r.effective + '</b></div>';
-    b += '<div class="kv"><span>NA 项</span><b>' + r.naCount + ' 项 · ' + r.naScore + ' 分</b></div>';
-    b += '<div class="kv"><span>折算得分</span><b>' + r.converted.toFixed(2) + '（' + r.grade + '）</b></div>';
-    b += '<div class="kv kv--total"><span>计入综合得分 ×30%</span><b>' + r.segment.toFixed(2) + '</b></div>';
-    if (v.vetoed) {
-      b += '<div class="err">已触发一票否决：' + esc(v.failed.join('、')) +
-        '<br>提交后本单位当期综合得分记 0 分、排名垫底、当年不得评优。</div>';
-    }
-    b += '<div class="field" style="margin-top:18px"><label>提交口令</label>' +
-      '<input type="password" id="passInput" placeholder="向计划经营科索取" autocomplete="off"></div>';
-    b += '<div class="hint" style="margin-top:10px">提交后生成 Excel 文件，请发回计划经营科。文件名含站名与月份，重复提交以最后一次为准。</div>';
-    b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">返回修改</button>' +
-      '<button class="btn btn--primary" id="doSubmit">确认提交</button></div>';
+    b += '<div class="kv"><span>检查人</span><b>' + esc(USER.name) + '</b></div>';
+    b += '<div class="kv"><span>不符合项</span><b>' + res.noCount + ' 项 · NA ' + res.naCount + ' 项</b></div>';
+    b += '<div class="kv kv--total"><span>折算得分</span><b>' + res.converted.toFixed(2) + ' / 100 → 运营段 ' + res.score.toFixed(2) + ' / 20</b></div>';
+    if (veto.vetoed) b += '<div class="err">已触发一票否决：' + esc(veto.failed.join('、')) + '</div>';
+    b += '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:18px;font-size:14px;line-height:1.6">' +
+      '<input type="checkbox" id="chkConfirm" style="width:20px;height:20px;flex:0 0 auto">';
+    b += '<span>我已逐项核对全部 73 项与 6 项一票否决，确认以上结果真实。</span></label>';
+    b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">返回</button>' +
+      '<button class="btn btn--primary" id="doSubmit" disabled>确认提交</button></div>';
     showSheet(b);
-
-    $('doSubmit').addEventListener('click', function () {
-      var pass = ($('passInput').value || '').trim();
-      if (pass !== C.submitPass) { UI.toast('口令不正确'); return; }
-      doGenerate(r, v);
-    });
+    $('chkConfirm').addEventListener('change', function () { $('doSubmit').disabled = !this.checked; });
+    $('doSubmit').addEventListener('click', function () { generate(res, veto); });
   }
 
-  function doGenerate(r, v) {
-    if (!window.XLSX) {
-      showSheet('<div class="sheet__grip"></div><h3>正在准备生成器</h3><div class="hint">首次提交需加载 Excel 生成库，请稍候…</div>');
-    }
-    loadXLSX().then(function () { writeOut(r, v); })
-      .catch(function (e) {
-        showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(e.message) +
-          '</div><div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
-      });
-  }
-
-  function writeOut(r, v) {
+  function generate(res, veto) {
     var ts = new Date();
-    var stamp = ts.getFullYear() + ('0' + (ts.getMonth() + 1)).slice(-2) + ('0' + ts.getDate()).slice(-2) +
-      ('0' + ts.getHours()).slice(-2) + ('0' + ts.getMinutes()).slice(-2);
-    var fname = '检查表_' + S_.station + '_' + S_.month + '_' + stamp + '.xlsx';
+    var stamp = ts.getFullYear() + pad(ts.getMonth() + 1) + pad(ts.getDate()) + pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
+    var base = '检查表_' + S_.station + '_' + S_.month + '_' + stamp;
 
     try {
-      var wb = buildWorkbook(r, v, ts);
-      XLSX.writeFile(wb, fname);
-      S.addOutbox({
-        station: S_.station, month: S_.month, inspector: S_.inspector,
-        submittedAt: ts.getTime(), fileName: fname,
-        converted: r.converted, grade: r.grade, vetoed: v.vetoed
+      var wb = buildWorkbook(res, veto, ts);
+      var xlsxB64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+      var zip = new JSZip();
+      zip.file(base + '.xlsx', xlsxB64, { base64: true });
+
+      var manifest = {
+        version: 'V5', station: S_.station, month: S_.month, inspector: USER.name,
+        submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
+        veto: veto.failed, photos: []
+      };
+      DATA.items.forEach(function (it) {
+        if (S_.items[it.no] !== 'no') return;
+        var key = it.no;
+        (S_.photos[key] || []).forEach(function (p, i) {
+          var nm = 'photos/' + S_.station + '_项' + it.no + '_' + (i + 1) + '.jpg';
+          zip.file(nm, p.data.split(',')[1], { base64: true });
+          manifest.photos.push({ itemNo: it.no, item: it.name, file: nm, reason: (S_.notes[key] || {}).reason || '' });
+        });
       });
-      S.removeDraft(S_.station + '|' + S_.month);
-      closeSheet();
-      showSheet('<div class="sheet__grip"></div><h3>已生成</h3>' +
-        '<div class="hint">文件已下载到手机：<br><b style="word-break:break-all;color:#0b2a39">' + esc(fname) +
-        '</b><br><br>请通过微信发回计划经营科，科室运行导入脚本后即写入金山表格。</div>' +
-        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>');
+      DATA.veto.forEach(function (v) {
+        if (S_.veto[v.no] !== 'no') return;
+        (S_.photos['v' + v.no] || []).forEach(function (p, i) {
+          var nm = 'photos/否决' + v.no + '_' + (i + 1) + '.jpg';
+          zip.file(nm, p.data.split(',')[1], { base64: true });
+          manifest.photos.push({ itemNo: 'v' + v.no, item: v.name, file: nm, reason: (S_.notes['v' + v.no] || {}).reason || '' });
+        });
+      });
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+      zip.generateAsync({ type: 'blob' }).then(function (blob) {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = base + '.zip'; document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+        S.removeDraft(S_.station + '|' + S_.month);
+        closeSheet();
+        showSheet('<div class="sheet__grip"></div><h3>已生成</h3><div class="hint">检查表与佐证照片已打包下载：<br><b>' + esc(base + '.zip') + '</b><br><br>发回计划经营科，由科室把照片导入金山在线表；GitHub 仓库不存照片。</div>' +
+          '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>');
+      });
     } catch (err) {
       showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(err.message) + '</div>' +
         '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
     }
   }
 
-  window.closeSheet = function () { $('mask').classList.remove('show'); };
-  function showSheet(html) { $('modal').innerHTML = html; $('mask').classList.add('show'); }
-
-  function buildWorkbook(r, v, ts) {
+  function buildWorkbook(res, veto, ts) {
     var aoa = [];
-    aoa.push(['二级运营检查评分表（V2.1）']);
+    aoa.push(['二级运营检查评分表（V5 · 目标责任考核 V1.0）']);
     aoa.push([]);
-    aoa.push(['油站名称', S_.station, '检查月份', S_.month]);
-    aoa.push(['检查人', S_.inspector, '提交时间', fmt(ts)]);
+    aoa.push(['油站', S_.station, '检查月份', S_.month]);
+    aoa.push(['检查人', USER.name, '提交时间', fmt(ts)]);
     aoa.push([]);
-    aoa.push(['第一部分  一票否决项']);
-    aoa.push(['序号', '否决项', '检查内容', '检查方法', '结果', '备注']);
-    DATA.veto.forEach(function (x) {
-      aoa.push([x.no, x.name, x.content, x.method, S_.veto[x.no] === 'no' ? '不合格' : '合格', '']);
+    aoa.push(['第一部分　一票否决项（默认合格）']);
+    aoa.push(['序号', '否决项', '检查内容', '检查方法', '结果', '说明', '照片数']);
+    DATA.veto.forEach(function (v) {
+      var a = S_.veto[v.no];
+      aoa.push([v.no, v.name, v.content, v.method, a === 'no' ? '不合格' : '合格',
+        (S_.notes['v' + v.no] || {}).reason || '', (S_.photos['v' + v.no] || []).length]);
     });
     aoa.push([]);
-    aoa.push(['第二部分  运营检查评分（100 分制）']);
-    aoa.push(['大类', '序号', '检查项目', '检查内容', '检查方法', '判定标准', '标准分', '得分', '整改', '备注']);
+    aoa.push(['第二部分　运营检查（100 分制 → 折算 20 分）']);
+    aoa.push(['大类', '序号', '检查项目', '检查内容', '检查方法', '判定标准', '标准分', '得分', '原因', '照片数']);
     DATA.items.forEach(function (it) {
       var a = S_.items[it.no];
-      var score = a === 'ok' ? it.score : a === 'na' ? 'NA' : 0;
       aoa.push([it.cat, it.no, it.name, it.content, it.method, it.std, it.score,
-        score, a === 'no' ? '是' : '', S_.notes[it.no] || '']);
+        a === 'ok' ? it.score : a === 'na' ? 'NA' : 0,
+        (S_.notes[it.no] || {}).reason || '', (S_.photos[it.no] || []).length]);
     });
     aoa.push([]);
-    aoa.push(['实得小计', r.raw]);
-    aoa.push(['NA 项标准分合计', r.naScore]);
-    aoa.push(['有效项总分', r.effective]);
-    aoa.push(['折算后得分（百分制）', r.converted]);
-    aoa.push(['检查得分等级', r.grade]);
-    aoa.push(['计入综合得分（×30%）', r.segment]);
+    aoa.push(['实得小计', res.raw, 'NA 项标准分', res.naScore,
+      '有效项总分', res.effective, '折算得分/100', res.converted, '运营段/20', res.score]);
+    aoa.push(['一票否决', veto.vetoed ? '已触发：' + veto.failed.join('、') : '未触发']);
+    aoa.push(['检查人', USER.name, '确认', '已逐项核对 73 项 + 6 项否决']);
 
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [{ wch: 18 }, { wch: 5 }, { wch: 20 }, { wch: 44 }, { wch: 26 },
-      { wch: 34 }, { wch: 7 }, { wch: 7 }, { wch: 6 }, { wch: 20 }];
+      { wch: 34 }, { wch: 7 }, { wch: 7 }, { wch: 24 }, { wch: 8 }];
 
-    var s2 = [['大类', '分值', '判定项数', '实得', '不符合项数', 'NA项数']];
+    var s2 = [['大类', '分值', '项数', '不符合项', 'NA 项']];
     DATA.categories.forEach(function (cat) {
       var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
-      var got = 0, no = 0, na = 0;
-      list.forEach(function (i) {
-        var a = S_.items[i.no];
-        if (a === 'ok') got += i.score;
-        if (a === 'no') no += 1;
-        if (a === 'na') na += 1;
-      });
-      s2.push([cat.title, cat.score, list.length, got, no, na]);
+      s2.push([cat.title, cat.score, list.length,
+        list.filter(function (i) { return S_.items[i.no] === 'no'; }).length,
+        list.filter(function (i) { return S_.items[i.no] === 'na'; }).length]);
     });
-    s2.push([]);
-    s2.push(['合计', DATA.total, DATA.items.length, r.raw, r.noCount, r.naCount]);
-    s2.push([]);
-    s2.push(['一票否决', v.vetoed ? '已触发：' + v.failed.join('、') : '未触发']);
     var ws2 = XLSX.utils.aoa_to_sheet(s2);
-    ws2['!cols'] = [{ wch: 24 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 8 }];
 
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '评分表');
@@ -477,15 +483,8 @@
     return wb;
   }
 
-  function fmt(d) {
-    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) +
-      ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-  }
+  window.closeSheet = function () { $('mask').classList.remove('show'); };
+  function showSheet(html) { $('modal').innerHTML = html; $('mask').classList.add('show'); }
 
   boot();
-
-  /* 空闲时预热生成库，保证到站无网也能出文件 */
-  window.addEventListener('load', function () {
-    setTimeout(function () { loadXLSX().catch(function () { }); }, 5000);
-  });
 })();

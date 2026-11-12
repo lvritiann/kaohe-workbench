@@ -14,7 +14,7 @@
   <div class="appbar__row">
     <div style="min-width:0">
       <h1 class="appbar__title">得分算例</h1>
-      <div class="appbar__sub" id="subTitle">四段可复算，站长自己能核</div>
+      <div class="appbar__sub" id="subTitle">五段可复算，站长自己能核</div>
     </div>
     <button class="theme-btn" id="themeBtn" aria-label="切换主题"></button>
   </div>
@@ -28,31 +28,28 @@
       <select id="fStation"><option value="">手动输入（不选站）</option></select>
     </div>
     <p class="hint" id="srcNote" style="margin-top:10px">
-      口径：《目标责任考核方案》V1.0 —— 油品45／非油10／人效15／管理30，基准100、封顶120。
+      口径：《目标责任考核方案》V1.0 —— 油品40／非油10／人效15／运营检查20／神秘访客15，基准100、封顶120。
     </p>
   </section>
 
   <div id="out"></div>
 
   <section class="card" id="paramCard" style="display:none">
-    <div class="sect__head" style="margin-bottom:10px">
-      <span class="sect__title">人效段参数</span><span class="sect__hint">可改</span>
-    </div>
-    <div class="field"><label>汽油（吨）</label><input type="text" id="gas" inputmode="decimal"></div>
-    <div class="field"><label>柴油（吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
-    <div class="field"><label>实际在岗人数</label><input type="text" id="head" inputmode="decimal"></div>
-    <div class="field"><label>特殊核定分母（一般留空，默认按在岗−4）</label><input type="text" id="denomFix" inputmode="decimal" placeholder="如玉华宫填 8"></div>
+    <div class="sect__head" style="margin-bottom:10px"><span class="sect__title">人效段参数</span><span class="sect__hint">可改</span></div>
+    <div class="field"><label>汽油（会计月累计吨）</label><input type="text" id="gas" inputmode="decimal"></div>
+    <div class="field"><label>柴油（会计月累计吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
+    <div class="field"><label>月均在岗人数（各日在岗之和 ÷ 天数）</label><input type="text" id="head" inputmode="decimal"></div>
+    <div class="field"><label>会计月天数（28/29/30/31，按实际）</label><input type="text" id="days" inputmode="decimal" value="30"></div>
   </section>
 
   <section class="card" id="oilCard" style="display:none">
-    <div class="sect__head" style="margin-bottom:10px">
-      <span class="sect__title">油品 / 非油段</span><span class="sect__hint">填当月数</span>
-    </div>
-    <div class="field"><label>当月实际销量（吨）</label><input type="text" id="oilActual" inputmode="decimal"></div>
-    <div class="field"><label>当月基础任务（吨）</label><input type="text" id="oilTask" inputmode="decimal"></div>
-    <div class="field"><label>非油销售完成率（%）</label><input type="text" id="nonSales" inputmode="decimal" value="100"></div>
-    <div class="field"><label>非油毛利完成率（%）</label><input type="text" id="nonMargin" inputmode="decimal" value="100"></div>
-    <div class="field"><label>现场检查折算得分</label><input type="text" id="insp" inputmode="decimal" value="90"></div>
+    <div class="sect__head" style="margin-bottom:10px"><span class="sect__title">其余四段</span><span class="sect__hint">填当月数</span></div>
+    <div class="field"><label>油品实际销量（吨）</label><input type="text" id="oilActual" inputmode="decimal"></div>
+    <div class="field"><label>油品基础任务（吨）</label><input type="text" id="oilTask" inputmode="decimal"></div>
+    <div class="field"><label>非油销售完成率（%，不含烟草）</label><input type="text" id="nonSales" inputmode="decimal" value="100"></div>
+    <div class="field"><label>非油毛利完成率（%，含烟草）</label><input type="text" id="nonMargin" inputmode="decimal" value="100"></div>
+    <div class="field"><label>二级运营检查折算得分（0–100）</label><input type="text" id="insp" inputmode="decimal" value="98"></div>
+    <div class="field"><label>神秘访客总分（0–100）</label><input type="text" id="mystery" inputmode="decimal" value="96.4"></div>
   </section>
 
   <div id="manual">
@@ -68,12 +65,13 @@
   <div class="sect__head" style="margin-top:22px"><span class="sect__title">口径速查</span></div>
   <section class="card">
     <div class="kv"><span>当量折算</span><b>汽油×56 ＋ 柴油×28</b></div>
-    <div class="kv"><span>分母</span><b>实际在岗 − 4</b></div>
-    <div class="kv"><span>人效段得分</span><b>人效 ÷ 65 × 15（封顶25）</b></div>
-    <div class="kv"><span>油品段</span><b>45×少扣多奖（封顶53）</b></div>
-    <div class="kv"><span>非油段</span><b>销售5＋毛利5（各封顶6）</b></div>
-    <div class="kv"><span>管理段</span><b>检查得分 × 30%</b></div>
-    <div class="kv kv--total"><span>综合</span><b>四段相加 − 投诉 ＋ 进步</b></div>
+    <div class="kv"><span>会计月</span><b>上月26日–本月25日，天数按实计</b></div>
+    <div class="kv"><span>分母</span><b>月均在岗人数 − 4</b></div>
+    <div class="kv"><span>人效段</span><b>人效 ÷ 65 × 15（封顶25）</b></div>
+    <div class="kv"><span>油品段</span><b>40 × 少扣多奖（封顶48）</b></div>
+    <div class="kv"><span>非油段</span><b>销售5＋毛利5，各封顶6</b></div>
+    <div class="kv"><span>现场管理</span><b>运营检查20 ＋ 神秘访客15</b></div>
+    <div class="kv kv--total"><span>综合</span><b>五段相加 − 投诉 ＋ 进步</b></div>
   </section>
 
   <p class="sect__note" style="margin-top:14px">
@@ -131,7 +129,7 @@ function pick(name) {
   document.getElementById('gas').value = s.gasTon;
   document.getElementById('diesel').value = s.dieselTon;
   document.getElementById('head').value = s.headcount;
-  document.getElementById('denomFix').value = '';
+  document.getElementById('days').value = 30;
   document.getElementById('nonSales').value = 100;
   document.getElementById('nonMargin').value = 100;
   document.getElementById('insp').value = 90;
@@ -146,7 +144,7 @@ function pick(name) {
   compute();
 }
 
-['gas', 'diesel', 'head', 'denomFix', 'oilActual', 'oilTask', 'nonSales', 'nonMargin', 'insp']
+['gas', 'diesel', 'head', 'days', 'oilActual', 'oilTask', 'nonSales', 'nonMargin', 'insp', 'mystery']
   .forEach(function (id) {
     document.addEventListener('input', function (e) {
       if (e.target && e.target.id === id && CUR) compute();
@@ -158,28 +156,25 @@ document.getElementById('go').addEventListener('click', function () {
   var d = parseFloat(document.getElementById('d2').value) || 0;
   var h = parseFloat(document.getElementById('h2').value) || 0;
   if (h <= 4) { document.getElementById('out').innerHTML = '<div class="err">在岗人数须大于 4（基础开班人数）。</div>'; return; }
-  render({ g: g, d: d, h: h });
+  render({ g: g, d: d, h: h, days: 30 });
 });
 
 function compute() {
   var g = parseFloat(document.getElementById('gas').value) || 0;
   var d = parseFloat(document.getElementById('diesel').value) || 0;
   var h = parseFloat(document.getElementById('head').value) || 0;
-  var fx = parseFloat(document.getElementById('denomFix').value) || 0;
+  var days = parseFloat(document.getElementById('days').value) || 30;
   if (h <= 0) return;
-  render({ g: g, d: d, h: h, fx: fx });
+  render({ g: g, d: d, h: h, days: days });
 }
 
 function render(o) {
   var H = CFG.hr;
-  var denom = o.fx > 0 ? o.fx : (o.h - H.baseHeadcount);
-  var sge = o.g * H.sgeGas + o.d * H.sgeDiesel;
-  var eff = denom > 0 ? sge / denom : 0;
-  var mult = eff / H.benchmark;
-  var rawScore = mult * CFG.seg.eff.base;
-  var effScore = Math.min(rawScore, CFG.seg.eff.cap);
-
+  var e = Engine.efficiency(o.g, o.d, o.h, o.days);
+  var eff = e.eff, mult = eff / H.benchmark;
+  var effScore = Math.min(mult * CFG.seg.eff.base, CFG.seg.eff.cap);
   var h = '';
+
   h += '<div class="card" style="margin-top:16px"><div class="meter">';
   h += '<div class="meter__main">';
   h += '<div class="meter__num">' + effScore.toFixed(2) + '<small>人效段 / 15 分</small></div>';
@@ -188,43 +183,42 @@ function render(o) {
     (effScore >= CFG.seg.eff.cap ? '封顶' : '达 ' + (mult * 100).toFixed(0) + '%') + '</span></div></div>';
 
   h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">人效段复算</span>' +
-    '<span class="sect__hint">四步</span></div><section class="card">';
-  h += '<div class="kv"><span>① 当量总量</span><b>' + o.g.toFixed(2) + '×56 ＋ ' + o.d.toFixed(2) + '×28 ＝ ' + sge.toFixed(1) + '</b></div>';
-  h += '<div class="kv"><span>② 分母</span><b>' + (o.fx > 0 ? '缺员修正 ' + denom : o.h + ' − 4 ＝ ' + denom) + '</b></div>';
-  h += '<div class="kv"><span>③ 人效</span><b>' + sge.toFixed(1) + ' ÷ ' + denom + ' ＝ ' + eff.toFixed(2) + '</b></div>';
-  h += '<div class="kv kv--total"><span>④ 人效段</span><b>' + eff.toFixed(2) + ' ÷ 65 × 15 ＝ ' + rawScore.toFixed(2) +
-    (rawScore > CFG.seg.eff.cap ? ' → 封顶 ' + CFG.seg.eff.cap : '') + '</b></div>';
-  h += '</section>';
+    '<span class="sect__hint">五步 · 会计月 ' + e.days + ' 天</span></div><section class="card">';
+  h += '<div class="kv"><span>① 月当量总量</span><b>' + o.g.toFixed(2) + '×56 ＋ ' + o.d.toFixed(2) + '×28 ＝ ' + e.totalSge.toFixed(1) + '</b></div>';
+  h += '<div class="kv"><span>② 日均当量</span><b>' + e.totalSge.toFixed(1) + ' ÷ ' + e.days + ' ＝ ' + e.daySge.toFixed(1) + '</b></div>';
+  h += '<div class="kv"><span>③ 分母</span><b>月均在岗 ' + o.h + ' − 4 ＝ ' + e.denom + '</b></div>';
+  h += '<div class="kv"><span>④ 人效</span><b>' + e.daySge.toFixed(1) + ' ÷ ' + e.denom + ' ＝ ' + eff.toFixed(2) + '</b></div>';
+  h += '<div class="kv kv--total"><span>⑤ 人效段</span><b>' + eff.toFixed(2) + ' ÷ 65 × 15 ＝ ' + (mult * CFG.seg.eff.base).toFixed(2) +
+    (mult * CFG.seg.eff.base > CFG.seg.eff.cap ? ' → 封顶 25' : '') + '</b></div></section>';
 
-  /* 油品段 */
   var oilActual = parseFloat(document.getElementById('oilActual').value) || 0;
   var oilTask = parseFloat(document.getElementById('oilTask').value) || 0;
   var nonS = (parseFloat(document.getElementById('nonSales').value) || 0) / 100;
   var nonM = (parseFloat(document.getElementById('nonMargin').value) || 0) / 100;
   var insp = parseFloat(document.getElementById('insp').value) || 0;
-
+  var myst = parseFloat(document.getElementById('mystery').value) || 0;
   var oil = Engine.oilSegment(oilActual, oilTask);
   var non = Engine.nonoilSegment(nonS, nonM);
-  var inspScore = Math.min(insp * CFG.inspect.weight, CFG.seg.inspect.cap);
+  var inspScore = Math.min(insp / 100 * CFG.seg.inspect.base, CFG.seg.inspect.cap);
+  var mystScore = Math.min(myst / 100 * CFG.seg.mystery.base, CFG.seg.mystery.cap);
 
-  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">四段合成</span>' +
+  h += '<div class="sect__head" style="margin-top:20px"><span class="sect__title">五段合成</span>' +
     '<span class="sect__hint">基准100 封顶120</span></div><section class="card">';
-  h += '<div class="kv"><span>油品段（45）</span><b>' + (oilTask > 0 ? '完成率 ' + (oil.rate * 100).toFixed(1) + '% → ' + oil.score.toFixed(2) : '待填任务') + '</b></div>';
+  h += '<div class="kv"><span>油品段（40）</span><b>' + (oilTask > 0 ? '完成率 ' + (oil.rate * 100).toFixed(1) + '% → ' + oil.score.toFixed(2) : '待填任务') + '</b></div>';
   h += '<div class="kv"><span>非油段（10）</span><b>销售 ' + non.salesScore.toFixed(2) + ' ＋ 毛利 ' + non.marginScore.toFixed(2) + ' ＝ ' + non.score.toFixed(2) + '</b></div>';
   h += '<div class="kv"><span>人效段（15）</span><b>' + effScore.toFixed(2) + '</b></div>';
-  h += '<div class="kv"><span>管理段（30）</span><b>' + inspScore.toFixed(2) + '</b></div>';
+  h += '<div class="kv"><span>运营检查（20）</span><b>' + inspScore.toFixed(2) + '</b></div>';
+  h += '<div class="kv"><span>神秘访客（15）</span><b>' + mystScore.toFixed(2) + '</b></div>';
   var total = Engine.composite({
-    oilScore: oil.score, nonoilScore: non.score,
-    effScore: effScore, inspectScore: inspScore
+    oilScore: oil.score, nonoilScore: non.score, effScore: effScore,
+    inspectScore: inspScore, mysteryScore: mystScore
   });
-  h += '<div class="kv kv--total"><span>合计</span><b>' + total.toFixed(2) + ' 分</b></div>';
-  h += '</section>';
+  h += '<div class="kv kv--total"><span>合计</span><b>' + total.toFixed(2) + ' 分</b></div></section>';
 
-  if (oil.score >= CFG.seg.oil.cap) h += '<div class="warn">油品段已封顶 53 分（完成率 ≥112%），超额不再加分。</div>';
+  if (oil.score >= CFG.seg.oil.cap) h += '<div class="warn">油品段已封顶 48 分（完成率 ≥113.3%），超额不再加分。</div>';
   if (effScore >= CFG.seg.eff.cap) h += '<div class="warn">人效段已封顶 25 分（人效达基准 1.67 倍），再高不再加分。</div>';
-
-  h += '<p class="sect__note" style="margin-top:12px">本方案不设优秀/良好等级，只按合计得分出 1–15 名排名；' +
-    '同分时油品段高者排前。投诉与进步加分另行加减。</p>';
+  h += '<p class="sect__note" style="margin-top:12px">本方案不设等级，只按合计得分出 1–15 名排名；' +
+    '同分时油品段高者排前。投诉扣分与进步加分另行加减。</p>';
 
   document.getElementById('out').innerHTML = h;
 }
