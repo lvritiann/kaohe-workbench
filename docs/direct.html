@@ -130,6 +130,7 @@ var API='https://api.github.com/repos/'+OWNER+'/'+REPO+'/contents/'+PATH;
 var STATIONS=['富平','汉中','秦岭','华山','白河','宁陕','韩城','南沙','旬阳','天汉水城','洋县','玉华宫','富县','照金','略阳'];
 var STATUS={normal:'正常营业',temp_closed:'临时关停',partial:'部分停业',force_majeure:'不可抗力',reopened:'复营'};
 var TOK_KEY='kaohe_direct_token';
+var PRESET_TOKEN='';   /* 线上版留空；内部「零配置版」由 make_prebuilt_client.py 填入 */
 var LEDGER=null, SHA=null;
 function storeGet(k){try{var v=localStorage.getItem(k);if(v)return v;}catch(e){}try{return sessionStorage.getItem(k);}catch(e){return null;}}
 function storeSet(k,v){try{localStorage.setItem(k,v);return;}catch(e){}try{sessionStorage.setItem(k,v);}catch(e){}}
@@ -244,7 +245,7 @@ function renderLedger(){
 
 function cfgState(){
   var ok=!!token();
-  $('cfgTag').textContent=ok?'已配置':'未配置';
+  $('cfgTag').textContent=PRESET_TOKEN?'已预置':(ok?'已配置':'未配置');
   $('cfgTag').className='tag '+(ok?'ok':'no');
   $('btnPush').disabled=!ok;
   if(ok) apiGet().then(renderLedger).catch(function(e){
@@ -319,6 +320,15 @@ $('btnPush').addEventListener('click',function(){
 });
 
 (function init(){
+  if(PRESET_TOKEN){
+    storeSet(TOK_KEY,PRESET_TOKEN);
+    $('cfgTag').textContent='已预置'; $('cfgTag').className='tag ok';
+    $('btnPush').disabled=false;
+    document.querySelector('#cfgOut').innerHTML=
+      '<div class="okbox">本文件已内置访问令牌，<b>无需填写任何内容</b>，直接往下填表签发即可。</div>';
+    var cfg=document.querySelectorAll('.card')[0];
+    if(cfg){ cfg.querySelectorAll('.field,#btnSave,#btnClear').forEach(function(el){el.style.display='none';}); }
+  }
   var sel=$('fStation');
   STATIONS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;sel.appendChild(o);});
   $('fFrom').value=today();
