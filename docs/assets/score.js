@@ -157,7 +157,7 @@
     h += '<section class="card" style="margin-top:16px">';
     h += '<div class="warn" style="margin:0 0 12px">73 项<b>默认全部符合</b>；只有发现问题才点该项「扣分」，填原因（必填）、可附照片。</div>';
     h += '<div class="field"><label>油站</label><select id="fStation"><option value="">请选择油站</option>';
-    C.stations.forEach(function (s) {
+    (C.physicalStations || C.stations).forEach(function (s) {
       h += '<option value="' + esc(s) + '"' + (s === S_.station ? ' selected' : '') + '>' + esc(s) + '</option>';
     });
     h += '</select></div>';
