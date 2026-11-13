@@ -127,6 +127,8 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
     验证：看 GitHub 仓库最新提交 SHA 是否等于本地 `git rev-parse --short HEAD`。若 `git ls-remote` 报 `schannel: server closed abruptly`，只是网络抖动，用 API 查 `branches/main` 确认即可，不要盲目重推。
 12. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v5-2` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
 
+13. **`git push` 被拒（non-fast-forward）**：AirScript 每次运行都会直接向 GitHub 推 `docs/data/efficiency.json`，远端因此多出本地没有的提交。**千万不要 `--force`**，会丢掉实时人效数据。按第 11 条的显式令牌写法先 `git fetch <仓库地址> main`，再 `git rebase FETCH_HEAD`，最后重推。验证：线上 `efficiency.json` 的 `updatedAt` 没有回退成旧值。
+
 ## 九、口径红线
 
 - **数据归口计划经营科**：全部计分数据从既有报表／在线驾驶舱按月汇总核对，站端只确认结果、不另行填报（定稿第十二章）；任何页面与文档都不得再设置站点填报环节。
