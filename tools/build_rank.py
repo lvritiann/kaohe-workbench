@@ -88,10 +88,13 @@ def demo_input(base):
     """确定性演示值：不引入随机数，便于复算与回归比对。"""
     out = []
     for i, b in enumerate(base):
+        # 演示口径：宁陕的油品任务量上调到较高水平（其余站保持 1000），
+        # 完成率随之下降，油品段得分与综合名次同步下降；只影响这一条模拟记录。
+        task = 2000 if b["name"] == "宁陕" else 1000
         out.append({
             "name": b["name"],
             "oilActual": 1000 * (0.90 + (i * 7 % 21) / 100.0),
-            "oilTask": 1000,
+            "oilTask": task,
             "nonoilSalesRate": 0.92 + (i * 3 % 9) / 100.0,
             "nonoilMarginRate": 0.95 + (i * 5 % 11) / 100.0,
             "inspectScore100": 100 - (i * 3 % 13),
