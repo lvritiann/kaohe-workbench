@@ -67,6 +67,11 @@ def main():
     inspector = m.get("inspector", "")
     submitted = m.get("submittedAt", "")
 
+    # 站名应属于 30 物理站（现场按南北/东西两侧分别打分，检查明细按物理站录）
+    _phys = cfg.get("physical_stations") or []
+    if _phys and station and station not in _phys:
+        print("[WARN] 站名「%s」不在 30 物理站清单内，请核对现场选站（两侧应分别打）" % station)
+
     queue, photos_payload = [], []
     for p in m.get("photos", []):
         rel = p.get("file", "")
