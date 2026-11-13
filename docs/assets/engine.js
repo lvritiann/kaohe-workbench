@@ -116,6 +116,31 @@ window.Engine = (function () {
     return r(Math.min(sum, C.totalCap || 120), 2);
   }
 
+  /* 两侧等权平均（服务区级）：同一服务区南北/东西两侧，二级段分、神访段分各取算术平均 */
+  function serviceAverage(a, b) { return r(((a || 0) + (b || 0)) / 2, 2); }
+
+  /* 把同一服务区两侧的打分结果合成为服务区级：
+     inspectScore / mysteryScore 分别等权平均；converted / mystery100 一并平均便于展示 */
+  function combineSides(sideA, sideB) {
+    sideA = sideA || {}; sideB = sideB || {};
+    return {
+      inspectScore: serviceAverage(sideA.inspectScore, sideB.inspectScore),
+      mysteryScore: serviceAverage(sideA.mysteryScore, sideB.mysteryScore),
+      converted: serviceAverage(sideA.converted, sideB.converted),
+      mystery100: serviceAverage(
+        sideA.mystery100 != null ? sideA.mystery100 : sideA.raw,
+        sideB.mystery100 != null ? sideB.mystery100 : sideB.raw)
+    };
+  }
+
+  /* 南沙特例：不参与神秘访客。综合 = 剩余四段实际得分 ÷ 剩余满分(C.nanshaBase 默认 85) × 100，封顶 120 */
+  function compositeNansha(p) {
+    var remain = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0) + (p.inspectScore || 0)
+      - (p.complaint || 0) + (p.progress || 0);
+    var base = C.nanshaBase || 85;
+    return r(Math.min(remain / base * 100, C.totalCap || 120), 2);
+  }
+
   function rank(rows) {
     var list = rows.slice().sort(function (a, b) {
       if (!!a.vetoed !== !!b.vetoed) return a.vetoed ? 1 : -1;
@@ -131,6 +156,7 @@ window.Engine = (function () {
     efficiency: efficiency, inspectResult: inspectResult, vetoResult: vetoResult,
     mysterySegment: mysterySegment, complaintDeduct: complaintDeduct,
     progressBonus: progressBonus, composite: composite, rank: rank,
+    serviceAverage: serviceAverage, combineSides: combineSides, compositeNansha: compositeNansha,
     gradeOf: gradeOf, round: r
   };
 })();
