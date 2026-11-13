@@ -599,7 +599,8 @@ details.more .std b { color: var(--text-2); font-weight: 600; font-family: var(-
    ============================================================ */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  /* 5 个导航项恒为单行等宽：不再按固定列数分栏、不换行 */
+  display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
   background: rgba(5, 10, 16, .92);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--line);
@@ -607,8 +608,10 @@ details.more .std b { color: var(--text-2); font-weight: 600; font-family: var(-
 }
 [data-theme="light"] .tabbar { background: rgba(255, 255, 255, .95); }
 .tabbar a {
+  flex: 1 1 0; min-width: 0; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 3px; height: var(--tabbar-h); color: var(--text-3); font-size: 10px;
+  padding: 0 2px; white-space: nowrap;
   transition: color var(--d-fast);
 }
 .tabbar a svg { width: 20px; height: 20px; stroke-width: 1.7; }
@@ -709,6 +712,41 @@ details.more .std b { color: var(--text-2); font-weight: 600; font-family: var(-
   box-shadow: var(--sh-2);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   手机端统一规范：只调布局与显示条件，不动页面内容与功能
+   ============================================================ */
+@media (max-width: 640px) {
+  /* 直推客户端磁贴仅 web（宽屏）显示，手机端隐藏。
+     按 href 精准命中首页磁贴，不改任何 HTML，也不影响 status.html 正文里的说明链接。 */
+  .tile[href="direct.html"],
+  .tile--web-only { display: none !important; }
+
+  /* 所有页面卡片统一：满宽、左边缘对齐、内外边距与圆角一致。
+     用 !important 抹平各页内联 style 差异；不覆盖 display / border-color / overflow，
+     以保留隐藏逻辑、警示语义色与表格横向滚动。 */
+  .card {
+    box-sizing: border-box;
+    width: 100%;
+    margin: var(--s3) 0 0 !important;
+    padding: var(--s4) !important;
+    border-radius: var(--r-lg) !important;
+  }
+  .screen > .sect__head {
+    margin-top: var(--s5) !important;
+    margin-bottom: var(--s2) !important;
+  }
+
+  /* KPI 小卡是网格单元，保持紧凑内边距，避免与网格 gap 叠加 */
+  .kpi > .card {
+    margin: 0 !important;
+    padding: var(--s3) !important;
+  }
+
+  /* 磁贴与卡片沿用同一套尺寸语言 */
+  .tiles { gap: var(--s3); }
+  .tile { padding: var(--s4); border-radius: var(--r-lg); }
+}
 
 /* ============================================================
    响应式 / 动效安全
