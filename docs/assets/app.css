@@ -746,13 +746,68 @@ details.more .std b { color: var(--text-2); font-weight: 600; font-family: var(-
   /* 磁贴与卡片沿用同一套尺寸语言 */
   .tiles { gap: var(--s3); }
   .tile { padding: var(--s4); border-radius: var(--r-lg); }
+
+  /* 键值行：手机端改为「标签在上、值在下」的堆叠式。
+     任意长度标签与日期/编号都能完整显示，全站左对齐、层级统一，
+     也不会再出现两栏互挤、标签被拆成竖排单字的情况。 */
+  .kv { display: block; padding: 9px 0; }
+  .kv > span {
+    display: block; margin-bottom: 3px;
+    font-size: 11px; line-height: 1.4; color: var(--text-3);
+    white-space: normal;
+  }
+  .kv > b {
+    display: block; text-align: left;
+    font-size: 13px; line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .kv--total > b { font-size: 15px; }
+
+  /* 长路径 / 长编号不撑破卡片 */
+  .card, .tile { overflow-wrap: break-word; }
+
+  /* Hero：按语义分段换行，不在「运营」「人效」等词组中间断开 */
+  .hero__formula {
+    font-size: 12px; line-height: 1.95;
+    word-break: keep-all; overflow-wrap: break-word; text-wrap: balance;
+  }
+  .hero__formula b, .hero__formula .sep { white-space: nowrap; }
+  .hero__meta { flex-wrap: wrap; gap: 6px 12px; }
+  .hero__meta span { white-space: nowrap; font-size: 11px; }
+
+  /* 全站字号 / 视觉层级统一 */
+  .appbar__title { font-size: 19px; }
+  .appbar__sub { font-size: 11px; }
+  .sect__title { font-size: 15px; }
+  .sect__hint, .sect__note, .hint { font-size: 11.5px; }
+  .sect__note, .hint { line-height: 1.7; }
+  .tile__t { font-size: 14px; }
+  .tile__d { font-size: 11px; }
+  .tbl { font-size: 11px; }
+  /* 单元格不折行：表格按内容撑开，由容器的 overflow-x:auto 横向滚动，
+     避免站名（如「天汉水城」）被压成竖排单字；紧凑间距让 375px 尽量全列可见 */
+  .tbl th, .tbl td { padding: 9px 4px; white-space: nowrap; }
+  .tbl .num, .tbl .rk { font-family: var(--font); letter-spacing: -.02em; }
+  .podium__name { font-size: 13px; }
+  .podium__score { font-size: 16px; }
+  .kpi__v { font-size: 22px !important; }
+  .kpi__k, .kpi__s { font-size: 10.5px !important; }
+  .bar__top, .bar__top b { font-size: 12px !important; }
+  .login-wrap { margin-top: 24px !important; }
 }
 
 /* ============================================================
    响应式 / 动效安全
    ============================================================ */
 @media (max-width: 359px) {
-  .tiles { grid-template-columns: 1fr; }
+  /* 极窄屏仍保持两列磁贴：单列会让磁贴又高又空，比例失调 */
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile { padding: 12px; }
+  .tile__icon { width: 30px; height: 30px; margin-bottom: 8px; }
+  .tile__icon svg { width: 17px; height: 17px; }
+  .tile__t { font-size: 13px; }
+  .tile__d { font-size: 10.5px; line-height: 1.45; }
+  .hero { padding: 16px; }
   .meter__num { font-size: 26px; }
   .chips { grid-template-columns: repeat(2, 1fr); }
 }
