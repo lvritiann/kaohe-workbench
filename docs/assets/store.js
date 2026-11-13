@@ -1,4 +1,4 @@
-/* 本地草稿与待交箱：IndexedDB，断网也能填、关掉浏览器不丢 */
+/* 本地草稿：IndexedDB，断网也能填、关掉浏览器不丢 */
 window.Store = (function () {
   var DB = 'kaohe_v2';
   var VER = 1;
@@ -11,7 +11,6 @@ window.Store = (function () {
       req.onupgradeneeded = function (e) {
         var db = e.target.result;
         if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'key' });
-        if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -33,8 +32,6 @@ window.Store = (function () {
     });
   }
 
-  function draftKey(station, month) { return station + '|' + month; }
-
   return {
     saveDraft: function (key, data) {
       data.key = key;
@@ -49,16 +46,6 @@ window.Store = (function () {
     },
     removeDraft: function (key) {
       return tx('drafts', 'readwrite', function (s) { s.delete(key); });
-    },
-    addOutbox: function (rec) {
-      rec.id = rec.id || (rec.station + '|' + rec.month + '|' + rec.submittedAt);
-      return tx('outbox', 'readwrite', function (s) { s.put(rec); });
-    },
-    listOutbox: function () {
-      return tx('outbox', 'readonly', function (s) { return s.getAll(); });
-    },
-    removeOutbox: function (id) {
-      return tx('outbox', 'readwrite', function (s) { s.delete(id); });
     }
   };
 })();
