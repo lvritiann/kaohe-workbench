@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""生成 V5 口径 docs/data/efficiency.json（本地兜底 / 月度留痕）
+"""生成 V6 口径 docs/data/efficiency.json（本地兜底 / 月度留痕）
 
 用法：
   # 用定稿附录B 日均基准 × 会计月天数（基准值，dataMode=baseline）
@@ -18,7 +18,7 @@
 }
 
 口径：人效 = (会计月当量 ÷ 天数) ÷ (月均在岗 − 4)
-     当量 = 汽油×56 + 柴油×28；基准 65；人效段 = 人效 ÷ 65 × 15，封顶 25
+     当量 = 汽油×39 + 柴油×27；基准 49；人效段 = 12×人效÷49（≤49）或 12+8×(人效−49)÷49（>49），封顶 20
      会计月 = 上月26日 — 本月25日，天数按实计
 history 逐月累积：同月覆盖、异月追加，≥2 期后 eff.html 自动画趋势线。
 """
@@ -32,9 +32,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIONS = os.path.join(ROOT, "docs", "data", "stations.json")
 OUT = os.path.join(ROOT, "docs", "data", "efficiency.json")
 
-SGE_GAS, SGE_DIESEL = 56, 28
-BASE_HEAD, BENCHMARK = 4, 65
-EFF_BASE, EFF_CAP = 15, 25
+SGE_GAS, SGE_DIESEL = 39, 27
+BASE_HEAD, BENCHMARK = 4, 49
+EFF_BASE, EFF_SURGE, EFF_CAP = 12, 8, 20
 
 
 def r(v, n=2):
@@ -56,7 +56,7 @@ def load_baseline():
 
 
 def build_rows(base, live, days, eff_days):
-    """统一产出 15 站 V5 人效行。live 里吨数为会计月累计；base 里为日均吨。
+    """统一产出 15 站 V6 人效行。live 里吨数为会计月累计；base 里为日均吨。
 
     days     = 完整会计月天数（写进 period.days）
     eff_days = 实际已计天数（月内滚动用已过天数，月末自然等于 days）
@@ -85,7 +85,8 @@ def build_rows(base, live, days, eff_days):
 
         denom = head - BASE_HEAD
         eff = day_sge / denom if denom > 0 else 0
-        score = min(eff / BENCHMARK * EFF_BASE, EFF_CAP)
+        score = min(EFF_BASE * eff / BENCHMARK if eff <= BENCHMARK
+                    else EFF_BASE + EFF_SURGE * (eff - BENCHMARK) / BENCHMARK, EFF_CAP)
 
         rows.append({
             "name": name,
@@ -151,7 +152,7 @@ def main():
         try:
             with open(OUT, encoding="utf-8") as f:
                 old = json.load(f)
-            if old.get("version") == "V5":
+            if old.get("version") == "V6":
                 history = [h for h in old.get("history", []) if h.get("month") != args.month]
         except Exception:
             pass
@@ -167,14 +168,14 @@ def main():
 
     now = dt.datetime.now()
     payload = {
-        "version": "V5",
+        "version": "V6",
         "month": args.month,
         "date": now.strftime("%Y-%m-%d"),
         "updatedAt": now.strftime("%Y-%m-%d %H:%M"),
         "dataMode": "live" if live else "baseline",
         "source": ("金山日报 · AirScript 会计月累计数据"
                    if live else "《目标责任考核方案》V1.0 附录B 表18（定稿日均基准）"),
-        "basis": "人效 = (会计月当量 ÷ 会计月天数) ÷ (月均在岗 − 4)；当量 = 汽油×56 + 柴油×28；人效段 = 人效 ÷ 65 × 15，封顶 25",
+        "basis": "人效 = (会计月当量 ÷ 会计月天数) ÷ (月均在岗 − 4)；当量 = 汽油×39 + 柴油×27；人效段 = 12×人效÷49（≤49）或 12+8×(人效−49)÷49（>49），封顶 20",
         "note": ("接入金山日报后由 tools/airscript/eff_push.js 每日覆盖；也可用本脚本本地生成。"
                  "baseline 仅作口径演示，不作为正式考核发榜依据。"),
         "period": {
@@ -184,7 +185,7 @@ def main():
         "params": {
             "sgeGas": SGE_GAS, "sgeDiesel": SGE_DIESEL,
             "baseHead": BASE_HEAD, "benchmark": BENCHMARK,
-            "effBase": EFF_BASE, "effCap": EFF_CAP
+            "effBase": EFF_BASE, "effSurge": EFF_SURGE, "effCap": EFF_CAP
         },
         "company": company,
         "stations": rows,

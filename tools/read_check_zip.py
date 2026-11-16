@@ -133,7 +133,7 @@ def main():
     cols = list(cfg.get("columns") or [
         "月份", "站名", "表类型", "序号", "大类", "检查项目",
         "标准分", "得分", "结果", "说明", "检查人", "提交时间",
-        "照片文件名", "照片附件ID", "折算得分(100)", "运营段得分(20)",
+        "照片文件名", "照片附件ID", "折算得分(100)", "运营段得分(28)",
         "一票否决项", "数据来源", "更新时间"
     ])
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -147,7 +147,7 @@ def main():
             "检查人": inspector, "提交时间": submitted,
             "照片文件名": q["filename"], "照片附件ID": "",
             "折算得分(100)": m.get("converted", ""),
-            "运营段得分(20)": m.get("inspectScore", ""),
+            "运营段得分(28)": m.get("inspectScore", ""),
             "一票否决项": veto_text,
             "数据来源": "现场打分zip / " + name,
             "更新时间": now

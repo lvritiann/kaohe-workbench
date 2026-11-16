@@ -1,5 +1,5 @@
 /* 现场检查打分 V5
-   依据《目标责任考核方案》V1.0：运营检查 100 分制 → 折算 20 分；6 项一票否决。
+   依据《目标责任考核方案》V1.0（V6）：运营检查 100 分制 → 折算 28 分；6 项一票否决。
    交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
    导出：检查表 Excel ＋ 照片包打成一个 zip；照片只进金山在线表，GitHub 不存。
 */
@@ -181,7 +181,7 @@
     h += '</div></section>';
 
     h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">运营检查</span>' +
-      '<span class="sect__hint">73 项 · 100 分 → 20 分</span></div>';
+      '<span class="sect__hint">73 项 · 100 分 → ' + C.seg.inspect.base + ' 分</span></div>';
 
     DATA.categories.forEach(function (cat, ci) {
       var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
@@ -379,7 +379,7 @@
 
     var res = E.inspectResult(DATA, S_);
     $('barScore').textContent = res.converted.toFixed(2);
-    $('barSub').textContent = '→ 运营段 ' + res.score.toFixed(2) + '/20 · 已扣 ' + deducted + ' 项' +
+    $('barSub').textContent = '→ 运营段 ' + res.score.toFixed(2) + '/' + C.seg.inspect.base + ' · 已扣 ' + deducted + ' 项' +
       (naCount ? ' · NA ' + naCount + ' 项' : '') + (vn ? ' · 否决 ' + vn : '');
     $('subInfo').textContent = (USER ? USER.name : '') + ' · ' + (S_.station || '未选站') + ' · ' + S_.month;
   }
@@ -431,7 +431,7 @@
     b += '<div class="kv"><span>油站 / 月份</span><b>' + esc(S_.station) + ' · ' + esc(S_.month) + '</b></div>';
     b += '<div class="kv"><span>检查人</span><b>' + esc(USER.name) + '</b></div>';
     b += '<div class="kv"><span>不符合项</span><b>' + res.noCount + ' 项 · NA ' + res.naCount + ' 项</b></div>';
-    b += '<div class="kv kv--total"><span>折算得分</span><b>' + res.converted.toFixed(2) + ' / 100 → 运营段 ' + res.score.toFixed(2) + ' / 20</b></div>';
+    b += '<div class="kv kv--total"><span>折算得分</span><b>' + res.converted.toFixed(2) + ' / 100 → 运营段 ' + res.score.toFixed(2) + ' / ' + C.seg.inspect.base + '</b></div>';
     if (veto.vetoed) b += '<div class="err">已触发一票否决：' + esc(veto.failed.join('、')) + '</div>';
     b += '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:18px;font-size:14px;line-height:1.6">' +
       '<input type="checkbox" id="chkConfirm" style="width:20px;height:20px;flex:0 0 auto">';
@@ -522,7 +522,7 @@
         (S_.notes['v' + v.no] || {}).reason || '', (S_.photos['v' + v.no] || []).length]);
     });
     aoa.push([]);
-    aoa.push(['第二部分　运营检查（100 分制 → 折算 20 分）']);
+    aoa.push(['第二部分　运营检查（100 分制 → 折算 ' + C.seg.inspect.base + ' 分）']);
     aoa.push(['大类', '序号', '检查项目', '检查内容', '检查方法', '判定标准', '标准分', '得分', '原因', '照片数']);
     DATA.items.forEach(function (it) {
       var a = S_.items[it.no];
@@ -532,7 +532,7 @@
     });
     aoa.push([]);
     aoa.push(['实得小计', res.raw, 'NA 项标准分', res.naScore,
-      '有效项总分', res.effective, '折算得分/100', res.converted, '运营段/20', res.score]);
+      '有效项总分', res.effective, '折算得分/100', res.converted, '运营段/' + C.seg.inspect.base, res.score]);
     aoa.push(['一票否决', veto.vetoed ? '已触发：' + veto.failed.join('、') : '未触发']);
     aoa.push(['检查人', USER.name, '确认', '已逐项核对 73 项 + 6 项否决']);
 

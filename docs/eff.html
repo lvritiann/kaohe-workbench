@@ -109,7 +109,7 @@ function render() {
 
   /* 公司 KPI */
   h += '<div class="kpi">' +
-    kpi('公司平均人效', f(C.avgEff), '基准 65 · 定稿 65.15') +
+    kpi('公司平均人效', f(C.avgEff), '基准 ' + CFG.hr.benchmark + ' · 当年固定') +
     kpi('最高站人效', f(C.maxEff), topName(rows, 1)) +
     kpi('最低站人效', f(C.minEff), topName(rows, -1), true) +
     kpi('参评站数', f(C.count, 0), '停业站不出分、不排名', true) +
@@ -148,14 +148,14 @@ function render() {
   /* 口径 */
   h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">口径</span></div>';
   h += '<section class="card">' +
-    '<div class="kv"><span>当量 SGE</span><b>汽油×56 ＋ 柴油×28（吨）</b></div>' +
+    '<div class="kv"><span>当量 SGE</span><b>汽油×' + CFG.hr.sgeGas + ' ＋ 柴油×' + CFG.hr.sgeDiesel + '（吨）</b></div>' +
     '<div class="kv"><span>人效</span><b>(月当量 ÷ 天数) ÷ (月均在岗 − 4)</b></div>' +
     '<div class="kv"><span>月均在岗</span><b>各日在岗之和 ÷ 会计月天数</b></div>' +
-    '<div class="kv"><span>人效段</span><b>人效 ÷ 65 × 15，封顶 25</b></div>' +
+    '<div class="kv"><span>人效段（12／封顶20）</span><b>≤' + CFG.hr.benchmark + '：12×人效÷' + CFG.hr.benchmark + '；&gt;' + CFG.hr.benchmark + '：12＋8×(人效−' + CFG.hr.benchmark + ')÷' + CFG.hr.benchmark + '</b></div>' +
     '<div class="kv"><span>会计月</span><b>上月 26 日 — 本月 25 日</b></div>' +
     '</section>';
-  h += '<p class="sect__note" style="margin-top:12px">V5 不设等级，只按综合得分出 1–15 名。' +
-    '本页人效仅为五段中的第三段，完整得分与排名请到「排名榜」查看。</p>';
+  h += '<p class="sect__note" style="margin-top:12px">V6 不设等级，只按综合得分出 1–15 名。' +
+    '本页人效为四项中的第三项（基准 12 分、封顶 20 分），完整得分与排名请到「排名榜」查看。</p>';
 
   document.getElementById('app').innerHTML = h;
   var sel = document.getElementById('selSt');
@@ -192,8 +192,8 @@ function detail(s) {
     ['月均在岗', f(s.monthlyHead) + ' 人'],
     ['分母（−4）', f(s.denom) + ' 人'],
     ['月均人效', f(s.monthEff) + ' SGE/人·天'],
-    ['相对基准 65', f(s.multiple, 3) + ' 倍'],
-    ['人效段得分', f(s.effScore) + ' / 25 分'],
+    ['相对基准 ' + CFG.hr.benchmark, f(s.multiple, 3) + ' 倍'],
+    ['人效段得分', f(s.effScore) + ' / ' + CFG.seg.eff.cap + ' 分'],
     ['人效排名', '第 ' + f(s.rank, 0) + ' 名']
   ];
   kv.forEach(function (x) {

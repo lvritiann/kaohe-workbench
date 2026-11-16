@@ -1,13 +1,17 @@
-/* 全局配置 V5 —— 《高速公路加油站目标责任考核方案》V1.0
-   定稿：2026-11-12 16:53（另一空间 worktree main-116434f9）
-   五段结构（基准 100 / 封顶 120）：
-     油品销量40(封顶48) + 非油销量10(封顶12) + 油品人效15(封顶25)
-     + 二级运营检查20 + 神秘访客15
-   综合 = 油品段+非油段+人效段+运营段+神访段 − 投诉扣分 + 进步加分
-   不设等级，只出 1–15 名排名。
+/* 全局配置 V6 —— 《高速公路加油站目标责任考核方案》V1.0（2026-11-16 定稿）
+   四项结构（基准 100 / 封顶 120）：
+     油品销量40(封顶50) + 非油销量10(封顶12) + 油品人效12(封顶20)
+     + 现场管理段38（一级考核5 + 二级运营检查28 + 神秘访客5）
+   综合 = 油品段+非油段+人效段+现场管理段 − 投诉扣分 + 进步加分
+   V6 变更要点：
+     1) 取消「少扣多奖」1.5/0.5 斜率，改为完成多少得多少分
+     2) SGE 汽油 56→39、柴油 28→27；基准人效 65→49
+     3) 人效段 15→12（基准分），新增 8 分冲击段，封顶 20
+     4) 现场管理段由 35→38，拆分出「一级考核」5 分
+   不设等级，只出 1–15 名排名（同分油品段优先）。
 */
 window.CFG = {
-  version: 'V5',
+  version: 'V6',
 
   /* 服务区（15 个）：考核/排名/人效/停业签发的最小单元 */
   stations: [
@@ -56,41 +60,49 @@ window.CFG = {
     '略阳东': '略阳', '略阳西': '略阳'
   },
 
-  /* 不参与神秘访客考核的服务区（神访列 NA，综合剔除神访段后归一） */
+  /* 不参与神秘访客考核的服务区（神访列 NA，按其余项得分率折算补齐 5 分） */
   mysteryExempt: ['南沙'],
 
-  /* 五段分值 */
+  /* 四项基准分与封顶 */
   seg: {
-    oil:      { base: 40, cap: 48 },
+    oil:      { base: 40, cap: 50 },
     nonoil:   { base: 10, cap: 12 },
-    eff:      { base: 15, cap: 25 },
-    inspect:  { base: 20, cap: 20 },
-    mystery:  { base: 15, cap: 15 }
+    eff:      { base: 12, cap: 20 },
+    primary:  { base: 5,  cap: 5  },   /* 一级考核 */
+    inspect:  { base: 28, cap: 28 },   /* 二级运营检查 */
+    mystery:  { base: 5,  cap: 5  },   /* 神秘访客 */
+    onSite:   { base: 38, cap: 38 }    /* 现场管理段 = 一级 + 二级 + 神访 */
   },
 
-  /* 少扣多奖：完成率≥100% 用 bonus 斜率，<100% 用 penalty 斜率 */
-  scoreRule: { bonus: 1.5, penalty: 0.5 },
+  /* V6：完成多少得多少分。capRate 为封顶对应的完成率 */
+  scoreRule: {
+    oilCapRate: 1.25,      /* 完成率 ≥125% 封顶 50 */
+    nonoilCapRate: 1.20,   /* 完成率 ≥120% 封顶 6 */
+    mode: 'direct'         /* direct = 得分＝基准分×完成率，不做打折/加倍 */
+  },
 
   /* 会计月：上月 26 日 — 本月 25 日，天数按实际计（28/29/30/31） */
   period: { startDay: 26, endDay: 25 },
 
-  /* 油品人效段 */
+  /* 油品人效段：基准分 12（人效=基准时得 12 分），冲击分 8（人效=2×基准时得满 20） */
   hr: {
-    sgeGas: 56,          /* 取整值，精确 55.65 */
-    sgeDiesel: 28,       /* 取整值，精确 28.80 */
+    sgeGas: 39,          /* 汽油 1 吨 = 39 SGE（1360 升 ÷ 34.75 升/单 ≈ 39 单，一台一份） */
+    sgeDiesel: 27,       /* 柴油 1 吨 = 27 SGE（1200 升 ÷ 153.35 升/单 ≈ 7.82 单 × 3.5 台 ≈ 27.4 取 27） */
     baseHeadcount: 4,    /* 24h 两班倒、每班至少 2 人的最低开班配置 */
-    benchmark: 65,       /* 15 站算术平均 65.15，取整；当年固定 */
-    fullAt: 1.67,        /* 人效达基准 1.67 倍（108.6）封顶 */
+    benchmark: 49,       /* 15 站算术平均 49.26 取整；当年固定，一年一核 */
+    baseScore: 12,       /* 人效 ≤ 基准 时按 12 × 人效/49 */
+    surgeScore: 8,       /* 人效 > 基准 时每高出基准一倍加 8 分 */
+    fullAt: 2.0,         /* 人效达基准 2 倍（98）封顶 20 */
     headcountMode: '月均在岗＝当月各日在岗之和 ÷ 会计月天数',
     engineDetail: {
-      gasLitrePerTon: 1333, dieselLitrePerTon: 1200,
-      gasLitrePerCar: 31.5, dieselLitrePerCar: 150,
-      gasCarWeight: 1.0, dieselCarWeight: 1.8,
-      gasLitreWeight: 0.01, dieselLitreWeight: 0.012
+      gasLitrePerTon: 1360, dieselLitrePerTon: 1200,
+      gasLitrePerCar: 34.75, dieselLitrePerCar: 153.35,
+      gasCarWeight: 1.0, dieselCarWeight: 3.5,
+      note: '作业量 = 接待车次 × 一台算几份；汽油一台 1 份，柴油一台顶 3.5 台'
     }
   },
 
-  /* 非油销量段：销售不含烟草、毛利含烟草 */
+  /* 非油销量段：销售不含烟草、毛利含烟草；各 5 分、各封顶 6 分 */
   nonoil: {
     salesWeight: 5, marginWeight: 5, capEach: 6,
     salesExcludesTobacco: true,
@@ -104,6 +116,12 @@ window.CFG = {
   },
 
   /* 现场管理段 */
+  primary: {
+    total: 100,          /* 一级考核百分制 */
+    freq: '每年一次',
+    naFill: true,        /* 当月未开展记 NA，按其余项得分率折算补齐 */
+    naNote: '一级考核得分 = 5 ×（该站其余项得分 ÷ 95），最高 5 分'
+  },
   inspect: { total: 100, items: 73, veto: 6, naAdjust: true },
   mystery: {
     total: 100,
@@ -111,14 +129,15 @@ window.CFG = {
     untestedFill: '当月参评站平均分'
   },
 
-  /* 投诉扣分（前三档按分扣减、不设下限；重大投诉一票否决） */
+  /* NA 折算通用基数：某项 NA 时，其余项基准满分合计 = 100 − 该项基准分 */
+  naBase: { primary: 95, mystery: 95 },
+
+  /* 投诉扣分（分档按分扣减、不设下限；重大投诉一票否决） */
   complaint: { escalate: 10, repeat: 20, regulator: 50, major: 'veto' },
 
-  /* 综合得分封顶：五段各自封顶之和＝120，进步加分不得突破 */
+  /* 综合得分封顶：各段封顶之和＝120（50+12+20+38），进步加分不得突破 */
   totalCap: 120,
 
-  /* 南沙不参与神秘访客：剩余四段满分 40+10+15+20=85 作归一基数 */
-  nanshaBase: 85,
   progressCap: 3,
   progressPerPct: 0.2,
 

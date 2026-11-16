@@ -1,59 +1,86 @@
-/* 计分引擎 V5 —— 《目标责任考核方案》V1.0 五段制
-   油品40 + 非油10 + 人效15 + 运营检查20 + 神秘访客15；基准100、封顶120
-   不设等级，只按综合得分出 1–15 名（同分油品段优先）
+/* 计分引擎 V6 —— 《目标责任考核方案》V1.0（2026-11-16 定稿）四项制
+   油品40(封顶50) + 非油10(封顶12) + 人效12(封顶20) + 现场管理38（一级5+二级28+神访5）
+   基准 100、封顶 120；不设等级，只按综合得分出 1–15 名（同分油品段优先）
+   V6：取消少扣多奖斜率，改为「完成多少得多少分」；NA 折算统一走 naFill()
 */
 window.Engine = (function () {
   var C = window.CFG;
 
   function r(n, d) { var p = Math.pow(10, d); return Math.round(n * p) / p; }
   function cap(v, c) { return Math.min(v, c); }
+  function clamp0(v) { return v > 0 ? v : 0; }
 
-  /* 少扣多奖：≥100% 按 1+1.5(r−1)；<100% 按 1+0.5(r−1) */
-  function multi(rate) {
-    var k = C.scoreRule;
-    return rate >= 1 ? 1 + k.bonus * (rate - 1) : 1 + k.penalty * (rate - 1);
+  /* 直接计分：得分 ＝ 基准分 × 完成率，到封顶即止（V6 取消打折/加倍） */
+  function direct(rate, base, capScore) {
+    if (!(rate > 0)) return 0;
+    return cap(base * rate, capScore);
   }
 
-  /* 一、油品销量段（40 / 封顶48） */
+  /* 一、油品销量段（40 / 封顶50） */
   function oilSegment(actualTon, taskTon) {
     if (!(taskTon > 0)) return { rate: 0, raw: 0, score: 0 };
     var rate = actualTon / taskTon;
-    var raw = Math.max(0, C.seg.oil.base * multi(rate));
+    var raw = clamp0(C.seg.oil.base * rate);
     return { rate: r(rate, 4), raw: r(raw, 2), score: r(cap(raw, C.seg.oil.cap), 2) };
   }
 
   /* 二、非油销量段（10 / 封顶12）
-     salesRate = 不含烟草销售完成率；marginRate = 含烟草毛利率完成率 */
+     salesRate = 不含烟草销售完成率；marginRate = 含烟草毛利率完成率；各 5 分、各封顶 6 */
   function nonoilSegment(salesRate, marginRate) {
     var w = C.nonoil;
-    var s = cap(Math.max(0, w.salesWeight * multi(salesRate)), w.capEach);
-    var m = cap(Math.max(0, w.marginWeight * multi(marginRate)), w.capEach);
+    var s = cap(clamp0(w.salesWeight * (salesRate || 0)), w.capEach);
+    var m = cap(clamp0(w.marginWeight * (marginRate || 0)), w.capEach);
     return {
-      salesRate: r(salesRate, 4), marginRate: r(marginRate, 4),
+      salesRate: r(salesRate || 0, 4), marginRate: r(marginRate || 0, 4),
       salesScore: r(s, 2), marginScore: r(m, 2),
       score: r(cap(s + m, C.seg.nonoil.cap), 2)
     };
   }
 
-  /* 三、油品人效段（15 / 封顶25）
-     gasTon/dieselTon = 会计月累计吨数；days = 会计月天数；monthlyHead = 月均在岗人数 */
+  /* 三、油品人效段（12 / 封顶20）
+     人效 ≤ 基准49：得分 ＝ 12 × 人效 ÷ 49
+     人效 > 基准49：得分 ＝ 12 ＋ 8 ×（人效 − 49）÷ 49
+     人效达基准 2 倍（98）封顶 20 */
   function efficiency(gasTon, dieselTon, monthlyHead, days) {
     var H = C.hr;
     days = days > 0 ? days : 30;
-    var totalSge = gasTon * H.sgeGas + dieselTon * H.sgeDiesel;
+    var totalSge = (gasTon || 0) * H.sgeGas + (dieselTon || 0) * H.sgeDiesel;
     var daySge = totalSge / days;
-    var denom = monthlyHead - H.baseHeadcount;
+    var denom = (monthlyHead || 0) - H.baseHeadcount;
     var eff = denom > 0 ? daySge / denom : 0;
-    var raw = eff / H.benchmark * C.seg.eff.base;
+    var b = H.benchmark;
+    var raw = eff <= b
+      ? H.baseScore * eff / b
+      : H.baseScore + H.surgeScore * (eff - b) / b;
     return {
       days: days, totalSge: r(totalSge, 1), daySge: r(daySge, 1),
       monthlyHead: monthlyHead, denom: r(denom, 2), eff: r(eff, 2),
-      multiple: r(eff / H.benchmark, 3),
-      raw: r(raw, 2), score: r(cap(raw, C.seg.eff.cap), 2)
+      multiple: r(eff / b, 3),
+      raw: r(raw, 2), score: r(cap(clamp0(raw), C.seg.eff.cap), 2)
     };
   }
 
-  /* 四、二级运营检查段（20） */
+  /* NA 折算通用函数：某项无数据（NA）时，按该站「其余项得分率」把这一项补齐
+     rawOther  = 该站其余项实际得分合计
+     baseOther = 该站其余项基准满分合计（100 − 该项基准分）
+     itemBase  = 该项基准分
+     例：一级考核 NA → naFill(其余项得分, 95, 5)；南沙神访 NA → naFill(其余项得分, 95, 5) */
+  function naFill(rawOther, baseOther, itemBase) {
+    if (!(baseOther > 0)) return 0;
+    return r(cap(clamp0(rawOther) / baseOther * itemBase, itemBase), 2);
+  }
+
+  /* 四之一、一级考核（5）—— 百分制折算；未开展记 NA 由 naFill 补齐 */
+  function primarySegment(score100, naRaw, naBase) {
+    if (score100 == null || score100 === '' || isNaN(score100)) {
+      var filled = naFill(naRaw || 0, naBase || C.naBase.primary, C.seg.primary.base);
+      return { raw: filled, na: true, score: r(filled, 2) };
+    }
+    var v = clamp0(Number(score100));
+    return { raw: r(v, 2), na: false, score: r(cap(v / 100 * C.seg.primary.base, C.seg.primary.cap), 2) };
+  }
+
+  /* 四之二、二级运营检查（28）—— 100 分制，NA 项标准分从分母剔除 */
   function inspectResult(data, answers) {
     var raw = 0, naScore = 0, naCount = 0, noCount = 0, undecided = 0;
     data.items.forEach(function (it) {
@@ -92,10 +119,49 @@ window.Engine = (function () {
     return { failed: failed, vetoed: failed.length > 0, undecided: undecided };
   }
 
-  /* 五、神秘访客段（15）；未测按当月参评站均分填补 */
-  function mysterySegment(score100, untested, peerAverage) {
+  /* 四之三、神秘访客（5）—— 未测按当月参评站均分填补；NA（南沙）由 naFill 补齐 */
+  function mysterySegment(score100, untested, peerAverage, naRaw, naBase) {
+    if (naRaw != null) {
+      var filled = naFill(naRaw, naBase || C.naBase.mystery, C.seg.mystery.base);
+      return { raw: filled, untested: true, na: true, score: r(filled, 2) };
+    }
     var s = untested ? (peerAverage || 0) : (score100 || 0);
-    return { raw: r(s, 2), untested: !!untested, score: r(cap(s / 100 * C.seg.mystery.base, C.seg.mystery.cap), 2) };
+    return {
+      raw: r(s, 2), untested: !!untested, na: false,
+      score: r(cap(clamp0(s) / 100 * C.seg.mystery.base, C.seg.mystery.cap), 2)
+    };
+  }
+
+  /* 现场管理段 NA 补齐（一级考核 / 神秘访客）
+     两者都是 5 分项，口径完全一致：某项 NA 时，该项得分 = 该项基准分 ×（其余项得分 ÷ 其余项基准满分）
+     其余项基准满分 = 100 − 所有 NA 项的基准分之和（一项 NA 为 95，两项 NA 为 90）
+     同时 NA 时用同一个得分率补齐，避免两项互相引用形成循环。
+     p = { oilScore, nonoilScore, effScore, inspectScore, primaryScore, primaryNA, mysteryScore, mysteryNA } */
+  function fillOnSiteNA(p) {
+    p = p || {};
+    var items = [
+      { k: 'primary', na: !!p.primaryNA, base: C.seg.primary.base, score: p.primaryScore || 0 },
+      { k: 'mystery', na: !!p.mysteryNA, base: C.seg.mystery.base, score: p.mysteryScore || 0 }
+    ];
+    var naBase = 0;
+    items.forEach(function (i) { if (i.na) naBase += i.base; });
+    if (!naBase) return { primaryScore: items[0].score, mysteryScore: items[1].score, naBase: 0, rate: null, otherScore: 0, otherBase: 0 };
+
+    var otherScore = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0) + (p.inspectScore || 0);
+    items.forEach(function (i) { if (!i.na) otherScore += i.score; });
+    var otherBase = totalBase() - naBase;
+    var rate = otherBase > 0 ? otherScore / otherBase : 0;
+
+    var out = { naBase: naBase, rate: r(rate, 4), otherScore: r(otherScore, 2), otherBase: otherBase };
+    items.forEach(function (i) {
+      out[i.k + 'Score'] = i.na ? r(cap(i.base * rate, i.base), 2) : r(i.score, 2);
+    });
+    return out;
+  }
+
+  /* 基准分合计（100）与封顶合计（120） */
+  function totalBase() {
+    return C.seg.oil.base + C.seg.nonoil.base + C.seg.eff.base + C.seg.onSite.base;
   }
 
   function complaintDeduct(c) {
@@ -105,25 +171,35 @@ window.Engine = (function () {
 
   function progressBonus(growthRate) {
     if (!(growthRate > 0)) return 0;
-    return r(Math.min(growthRate * 100 * C.progressPerPct, C.progressCap), 2);
+    return r(Math.min(growthRate * 100 * C.progressPerPct || 0, C.progressCap), 2);
   }
 
+  /* 现场管理段合计 = 一级 + 二级 + 神访 */
+  function onSiteScore(p) {
+    return r((p.primaryScore || 0) + (p.inspectScore || 0) + (p.mysteryScore || 0), 2);
+  }
+
+  /* 综合 = 油品 + 非油 + 人效 + 现场管理段 − 投诉 + 进步；封顶 120（投诉不设下限）
+     触发一票否决 → 当期记 0 分（与 build_rank.py / 方案第九章一致） */
   function composite(p) {
+    if (p && p.vetoed) return 0;
+    var na = fillOnSiteNA(p);
     var sum = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0)
-      + (p.inspectScore || 0) + (p.mysteryScore || 0)
+      + (p.inspectScore || 0) + na.primaryScore + na.mysteryScore
       - (p.complaint || 0) + (p.progress || 0);
-    /* 定稿：综合封顶 120；投诉扣分不设下限，故不夹下界 */
     return r(Math.min(sum, C.totalCap || 120), 2);
   }
 
-  /* 两侧等权平均（服务区级）：同一服务区南北/东西两侧，二级段分、神访段分各取算术平均 */
+  /* 两侧等权平均（服务区级） */
   function serviceAverage(a, b) { return r(((a || 0) + (b || 0)) / 2, 2); }
 
   /* 把同一服务区两侧的打分结果合成为服务区级：
-     inspectScore / mysteryScore 分别等权平均；converted / mystery100 一并平均便于展示 */
+     primaryScore / inspectScore / mysteryScore 分别等权平均；converted / mystery100 一并平均便于展示 */
   function combineSides(sideA, sideB) {
     sideA = sideA || {}; sideB = sideB || {};
+    var hasP = sideA.primaryScore != null || sideB.primaryScore != null;
     return {
+      primaryScore: hasP ? serviceAverage(sideA.primaryScore, sideB.primaryScore) : null,
       inspectScore: serviceAverage(sideA.inspectScore, sideB.inspectScore),
       mysteryScore: serviceAverage(sideA.mysteryScore, sideB.mysteryScore),
       converted: serviceAverage(sideA.converted, sideB.converted),
@@ -131,14 +207,6 @@ window.Engine = (function () {
         sideA.mystery100 != null ? sideA.mystery100 : sideA.raw,
         sideB.mystery100 != null ? sideB.mystery100 : sideB.raw)
     };
-  }
-
-  /* 南沙特例：不参与神秘访客。综合 = 剩余四段实际得分 ÷ 剩余满分(C.nanshaBase 默认 85) × 100，封顶 120 */
-  function compositeNansha(p) {
-    var remain = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0) + (p.inspectScore || 0)
-      - (p.complaint || 0) + (p.progress || 0);
-    var base = C.nanshaBase || 85;
-    return r(Math.min(remain / base * 100, C.totalCap || 120), 2);
   }
 
   function rank(rows) {
@@ -152,11 +220,13 @@ window.Engine = (function () {
   }
 
   return {
-    multi: multi, oilSegment: oilSegment, nonoilSegment: nonoilSegment,
-    efficiency: efficiency, inspectResult: inspectResult, vetoResult: vetoResult,
+    direct: direct, oilSegment: oilSegment, nonoilSegment: nonoilSegment,
+    efficiency: efficiency, naFill: naFill,
+    primarySegment: primarySegment, inspectResult: inspectResult, vetoResult: vetoResult,
     mysterySegment: mysterySegment, complaintDeduct: complaintDeduct,
-    progressBonus: progressBonus, composite: composite, rank: rank,
-    serviceAverage: serviceAverage, combineSides: combineSides, compositeNansha: compositeNansha,
+    progressBonus: progressBonus, onSiteScore: onSiteScore, composite: composite,
+    fillOnSiteNA: fillOnSiteNA, totalBase: totalBase,
+    rank: rank, serviceAverage: serviceAverage, combineSides: combineSides,
     gradeOf: gradeOf, round: r
   };
 })();
