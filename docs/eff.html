@@ -151,7 +151,8 @@ function render() {
     '<div class="kv"><span>当量 SGE</span><b>汽油×' + CFG.hr.sgeGas + ' ＋ 柴油×' + CFG.hr.sgeDiesel + '（吨）</b></div>' +
     '<div class="kv"><span>销量口径</span><b>含批发（现金＋POS＋微信＋支付宝＋工贸卡＋壳牌卡＋大客户＋定期结算）</b></div>' +
     '<div class="kv"><span>人效</span><b>(月当量 ÷ 天数) ÷ (月均在岗 − 4)</b></div>' +
-    '<div class="kv"><span>月均在岗</span><b>各日在岗之和 ÷ 会计月天数</b></div>' +
+    '<div class="kv"><span>月均在岗</span><b>各日在岗之和 ÷ 已计天数</b></div>' +
+    '<div class="kv"><span>会计月天数</span><b>28／29／30／31 天按实际（上月26日—本月25日）</b></div>' +
     '<div class="kv"><span>人效段（12／封顶20）</span><b>≤' + CFG.hr.benchmark + '：12×人效÷' + CFG.hr.benchmark + '；&gt;' + CFG.hr.benchmark + '：12＋8×(人效−' + CFG.hr.benchmark + ')÷' + CFG.hr.benchmark + '</b></div>' +
     '<div class="kv"><span>会计月</span><b>上月 26 日 — 本月 25 日</b></div>' +
     '</section>';

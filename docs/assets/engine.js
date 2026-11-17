@@ -10,6 +10,29 @@ window.Engine = (function () {
   function cap(v, c) { return Math.min(v, c); }
   function clamp0(v) { return v > 0 ? v : 0; }
 
+  /* 当前会计月 'YYYY-MM'：26 日及以后算下个月 */
+  function currentMonth() {
+    var t = new Date(), y = t.getFullYear(), m = t.getMonth() + 1;
+    if (t.getDate() >= 26) { m += 1; if (m > 12) { m = 1; y += 1; } }
+    return y + '-' + (m < 10 ? '0' + m : m);
+  }
+
+  /* 会计月天数：上月 26 日 — 本月 25 日，实际 28/29/30/31 天不等。
+     例：2026-03 → 28 天；2027-03 → 28 天；2028-03（闰年含 2/29）→ 29 天。
+     ★ 任何地方都不得把天数写死成 30 或 31。 */
+  function accountDays(month) {
+    var mm = String(month || currentMonth()).split('-');
+    var y = parseInt(mm[0], 10), m = parseInt(mm[1], 10);
+    if (!(y > 1900) || !(m >= 1 && m <= 12)) {
+      mm = currentMonth().split('-'); y = parseInt(mm[0], 10); m = parseInt(mm[1], 10);
+    }
+    var sy = (m === 1) ? y - 1 : y;
+    var sm = (m === 1) ? 12 : m - 1;
+    var start = new Date(sy, sm - 1, 26);
+    var end = new Date(y, m - 1, 25);
+    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  }
+
   /* 直接计分：得分 ＝ 基准分 × 完成率，到封顶即止（V6 取消打折/加倍） */
   function direct(rate, base, capScore) {
     if (!(rate > 0)) return 0;
@@ -43,7 +66,7 @@ window.Engine = (function () {
      人效达基准 2 倍（98）封顶 20 */
   function efficiency(gasTon, dieselTon, monthlyHead, days) {
     var H = C.hr;
-    days = days > 0 ? days : 30;
+    days = days > 0 ? days : accountDays(currentMonth());   /* 按会计月实算，不写死 30 */
     var totalSge = (gasTon || 0) * H.sgeGas + (dieselTon || 0) * H.sgeDiesel;
     var daySge = totalSge / days;
     var denom = (monthlyHead || 0) - H.baseHeadcount;
@@ -222,6 +245,7 @@ window.Engine = (function () {
   return {
     direct: direct, oilSegment: oilSegment, nonoilSegment: nonoilSegment,
     efficiency: efficiency, naFill: naFill,
+    accountDays: accountDays, currentMonth: currentMonth,
     primarySegment: primarySegment, inspectResult: inspectResult, vetoResult: vetoResult,
     mysterySegment: mysterySegment, complaintDeduct: complaintDeduct,
     progressBonus: progressBonus, onSiteScore: onSiteScore, composite: composite,

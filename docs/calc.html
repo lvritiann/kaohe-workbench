@@ -39,7 +39,7 @@
     <div class="field"><label>汽油（会计月累计吨）</label><input type="text" id="gas" inputmode="decimal"></div>
     <div class="field"><label>柴油（会计月累计吨）</label><input type="text" id="diesel" inputmode="decimal"></div>
     <div class="field"><label>月均在岗人数（各日在岗之和 ÷ 天数）</label><input type="text" id="head" inputmode="decimal"></div>
-    <div class="field"><label>会计月天数（28/29/30/31，按实际）</label><input type="text" id="days" inputmode="decimal" value="30"></div>
+    <div class="field"><label>会计月天数（28/29/30/31，按实际）</label><input type="text" id="days" inputmode="decimal" placeholder="按会计月实算"></div>
   </section>
 
   <section class="card" id="oilCard" style="display:none">
@@ -120,6 +120,9 @@ Promise.all([
     sel.appendChild(op);
   });
   sel.addEventListener('change', function () { pick(this.value); });
+  /* 天数初值按会计月实算（28/29/30/31），不写死 30 */
+  document.getElementById('days').value =
+    window.Engine.accountDays(EFFMETA.month);
   document.getElementById('srcNote').textContent = EFFMETA.month
     ? ('人效数源：efficiency.json · ' + EFFMETA.month + ' 会计月第 ' + EFFMETA.days + ' 天实况'
        + '（月累计当量 ÷ 已计天数 ÷（月均在岗−4））')
@@ -146,17 +149,18 @@ function pick(name) {
   document.getElementById('oilCard').style.display = 'block';
   document.getElementById('manual').style.display = 'none';
   /* 默认值取当月实况：efficiency.json 存的是会计月累计吨 + 已计天数；
-     缺失时回退 stations.json 的三年平均日均吨 × 30 */
+     缺失时回退 stations.json 的三年平均日均吨 × 会计月实际天数（28/29/30/31） */
+  var CN = window.Engine.accountDays(EFFMETA.month);
   var e = EFF[name];
   if (e) {
-    document.getElementById('days').value = e.days || 30;
+    document.getElementById('days').value = e.days || CN;
     document.getElementById('gas').value = e.monthGas.toFixed(1);
     document.getElementById('diesel').value = e.monthDiesel.toFixed(1);
     document.getElementById('head').value = e.monthlyHead;
   } else {
-    document.getElementById('days').value = 30;
-    document.getElementById('gas').value = (s.gasTon * 30).toFixed(1);
-    document.getElementById('diesel').value = (s.dieselTon * 30).toFixed(1);
+    document.getElementById('days').value = CN;
+    document.getElementById('gas').value = (s.gasTon * CN).toFixed(1);
+    document.getElementById('diesel').value = (s.dieselTon * CN).toFixed(1);
     document.getElementById('head').value = s.headcount;
   }
   document.getElementById('nonSales').value = 100;
@@ -185,14 +189,14 @@ document.getElementById('go').addEventListener('click', function () {
   var d = parseFloat(document.getElementById('d2').value) || 0;
   var h = parseFloat(document.getElementById('h2').value) || 0;
   if (h <= 4) { document.getElementById('out').innerHTML = '<div class="err">在岗人数须大于 4（基础开班人数）。</div>'; return; }
-  render({ g: g, d: d, h: h, days: 30 });
+  render({ g: g, d: d, h: h, days: window.Engine.accountDays(EFFMETA.month) });
 });
 
 function compute() {
   var g = parseFloat(document.getElementById('gas').value) || 0;
   var d = parseFloat(document.getElementById('diesel').value) || 0;
   var h = parseFloat(document.getElementById('head').value) || 0;
-  var days = parseFloat(document.getElementById('days').value) || 30;
+  var days = parseFloat(document.getElementById('days').value) || window.Engine.accountDays(EFFMETA.month);
   if (h <= 0) return;
   render({ g: g, d: d, h: h, days: days });
 }
