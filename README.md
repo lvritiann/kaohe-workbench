@@ -16,7 +16,10 @@
 
 - **综合** ＝ 油品段 ＋ 非油段 ＋ 人效段 ＋ 现场管理段 − 投诉扣分 + 进步加分；基准 100、封顶 120；**不设等级，只出 1–15 名**，同分油品段高者排前。
 - **计分方式**：完成多少得多少分，**不打折、不加倍**，到封顶即止（V6 取消了 V5 的「少扣多奖」1.5/0.5 斜率）。
-- **人效** ＝ (会计月当量总量 ÷ 会计月天数) ÷ (月均在岗人数 − 4)；当量 SGE ＝ 汽油吨×**39** ＋ 柴油吨×**27**；月均在岗 ＝ 各日在岗之和 ÷ 会计月天数；基准 **49**（15 站算术平均 49.26 取整，当年固定、一年一核）。
+- **人效** ＝ (会计月当量总量 ÷ **已计天数**) ÷ (月均在岗人数 − 4)；当量 SGE ＝ 汽油吨×**39** ＋ 柴油吨×**27**；月均在岗 ＝ 各日在岗之和 ÷ 已计天数；基准 **49**（15 站算术平均 49.26 取整，当年固定、一年一核）。
+  - ★ **人效只有一个数源：`docs/data/efficiency.json`（当月实况）**。排名页、计算页、人效看板三处同源同值。
+  - `stations.json` 里的三年平均日均吨是**参考值，不参与计分**——它算出来的是「历史基准人效」，与当月实况不是一回事（2026-11 实测：南沙基准 50.20 / 当月 180.89）。
+  - 月中滚动用「已计天数」，月末自然等于整月天数。
 - **SGE 系数来源**：汽油按实测单均 34.75 升/单，一吨 1360 升 ≈ 39 单，一台一份 → 39；柴油按实测单均 153.35 升/单，一吨 1200 升 ≈ 7.82 单，一台顶 3.5 台 → 27.4 取 27。
 - **会计月** ＝ 上月 26 日 — 本月 25 日，天数按实计（28/29/30/31）。
 - **非油**：销售完成率**不含烟草**，毛利率完成率**含烟草**；毛利率 ＝ 全月毛利额 ÷ 全月销售额，不按日均毛利率平均。
@@ -74,10 +77,10 @@
 - `docs/assets/config.js` — 全局口径（唯一规则源）
 - `docs/assets/engine.js` — 四项计分引擎
 - `docs/data/items.json` — 73 判定项 + 6 否决项（由 `tools/export_items.py` 从权威 Excel 导出并校验）
-- `docs/data/stations.json` — V6 定稿 15 站人效基准（39/27 系数、基准 49）
+- `docs/data/stations.json` — 15 站**三年平均日均吨参考值**（39/27 系数、基准 49）。★ 自 2026-11-17 起**不再参与计分**，仅供对照
 - `docs/data/inspectors.json` — 打分人名单与口令
-- `docs/data/efficiency.json` — 实时/月均人效（AirScript 推，或本地生成）
-- `docs/data/rank.json` — 月度四项排名
+- `docs/data/efficiency.json` — **当月人效唯一数源**（会计月累计当量 ÷ 已计天数 ÷（月均在岗−4）），AirScript 推送或本地生成
+- `docs/data/rank.json` — 月度四项排名（人效段直接取自 `efficiency.json`，与「人效看板」同源同值）
 - `docs/data/station_status.json` — 运营状态台账
 - `tools/build_efficiency.py` — 本地生成/覆盖 V6 人效数据
 - `tools/build_rank.py` — 生成月度四项排名
@@ -118,18 +121,19 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 2. **口令不对**：手机号**后四位、含前导零**（`0045` 不能输成 `45`）、无空格；名单改过要联网打开一次并强刷（`/data/` 网络优先）。
 3. **点提交没反应**：每个扣分项必须填原因；提交弹层必须勾「已逐项核对」。
 4. **照片没进 zip**：手机需允许相册/相机权限；单张压缩到 1280px，最多 3 张。
-5. **分数与定稿对不上**：确认用 39/27（不是 55.65/28.80、也不是 V5 的 56/28）、基准 49（不是 65）、月均在岗−4、会计月天数按实计、毛利含烟草、分母不是当日人数。
-6. **人效看板不刷新**：AirScript 末尾的 `main();` 不能删；看 `efficiency.json` 的 `updatedAt`；SW 对 `/data/` 是「先网络后缓存」，断网才用旧值。
-7. **照片进金山**：`python tools/read_check_zip.py <zip>` 一次产出三件 —— `检查明细_导入行.tsv`（粘贴）、`kdocs_upload_payload.json`（base64 直传清单）、`wps_upload_queue.json`（回填 attachmentId）。照片只进金山在线表，GitHub 零照片；在线表需先扩「照片文件名 / 照片附件ID」两列。
-8. **换打分人 / 改题目**：改对应 JSON → 推 GitHub → 升 sw 版本 → 页面强刷。
-9. **离线**：首次联网打开后自动缓存；断网可打分可导出，照片只存本地草稿。
-10. **停业站仍出现在榜上**：检查 `station_status.json` 的 `from`/`active` 与 `status.html` 签发的变更单是否已推送。
-11. **`git push` 卡住 / SIGTERM**：代理环境下 HTTP/2 大包会挂起。改用「显式令牌 + HTTP/1.1」（令牌只从 `.gh_token.txt` 读，不写入 git 配置）：
+5. **分数与定稿对不上**：确认用 39/27（不是 55.65/28.80、也不是 V5 的 56/28）、基准 49（不是 65）、月均在岗−4、**已计天数**（不是整月天数）、毛利含烟草、分母不是当日人数。
+6. **排名页的人效和看板不一样**：只可能是一个原因 —— 有人把 `build_rank.py` 的 `eff_map` 改回读 `stations.json`。人效段**只能**读 `docs/data/efficiency.json`（当月实况）；`stations.json` 是三年日均参考值，不参与计分。改完跑 `python tools/build_rank.py`，15 站的 effScore 必须与 `efficiency.json` 逐站相等。
+7. **人效看板不刷新**：AirScript 末尾的 `main();` 不能删；看 `efficiency.json` 的 `updatedAt`；SW 对 `/data/` 是「先网络后缓存」，断网才用旧值。
+8. **照片进金山**：`python tools/read_check_zip.py <zip>` 一次产出三件 —— `检查明细_导入行.tsv`（粘贴）、`kdocs_upload_payload.json`（base64 直传清单）、`wps_upload_queue.json`（回填 attachmentId）。照片只进金山在线表，GitHub 零照片；在线表需先扩「照片文件名 / 照片附件ID」两列。
+9. **换打分人 / 改题目**：改对应 JSON → 推 GitHub → 升 sw 版本 → 页面强刷。
+10. **离线**：首次联网打开后自动缓存；断网可打分可导出，照片只存本地草稿。
+11. **停业站仍出现在榜上**：检查 `station_status.json` 的 `from`/`active` 与 `status.html` 签发的变更单是否已推送。
+12. **`git push` 卡住 / SIGTERM**：代理环境下 HTTP/2 大包会挂起。改用「显式令牌 + HTTP/1.1」（令牌只从 `.gh_token.txt` 读，不写入 git 配置）：
     `python -c "import subprocess;t=open('.gh_token.txt',encoding='utf-8').read().strip();subprocess.run(['git','-c','http.version=HTTP/1.1','-c','http.postBuffer=5242880','push','https://x-access-token:'+t+'@github.com/lvritiann/kaohe-workbench.git','main'])"`
     验证：看 GitHub 仓库最新提交 SHA 是否等于本地 `git rev-parse --short HEAD`。若 `git ls-remote` 报 `schannel: server closed abruptly`，只是网络抖动，用 API 查 `branches/main` 确认即可，不要盲目重推。
-12. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v5-2` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
+13. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v6-1` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
 
-13. **`git push` 被拒（non-fast-forward）**：AirScript 每次运行都会直接向 GitHub 推 `docs/data/efficiency.json`，远端因此多出本地没有的提交。**千万不要 `--force`**，会丢掉实时人效数据。按第 11 条的显式令牌写法先 `git fetch <仓库地址> main`，再 `git rebase FETCH_HEAD`，最后重推。验证：线上 `efficiency.json` 的 `updatedAt` 没有回退成旧值。
+14. **`git push` 被拒（non-fast-forward）**：AirScript 每次运行都会直接向 GitHub 推 `docs/data/efficiency.json`，远端因此多出本地没有的提交。**千万不要 `--force`**，会丢掉实时人效数据。按第 12 条的显式令牌写法先 `git fetch <仓库地址> main`，再 `git rebase FETCH_HEAD`，最后重推。验证：线上 `efficiency.json` 的 `updatedAt` 没有回退成旧值。
 
 ## 九、口径红线
 

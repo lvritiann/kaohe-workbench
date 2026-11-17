@@ -87,8 +87,9 @@ function render(d) {
     h += '<div class="card" style="margin-top:16px;border-color:var(--warn,#d89b2b)">' +
       '<div class="sect__head"><span class="sect__title">示例数据</span>' +
       '<span class="sect__hint">非正式发榜</span></div>' +
-      '<div class="hint">油品／非油／一级／运营／神访为演示填值，人效段取自 V6 定稿基准（49）。' +
-      '科室核算后用 <b>tools/build_rank.py</b> 覆盖 data/rank.json 即为正式榜。</div></div>';
+      '<div class="hint">油品／非油／一级／运营／神访为演示填值；' +
+      '<b>人效段取自 efficiency.json 当月实况</b>（会计月累计当量 ÷ 已计天数 ÷（月均在岗−4）），' +
+      '与「人效看板」同源同值。科室核算后用 <b>tools/build_rank.py</b> 覆盖 data/rank.json 即为正式榜。</div></div>';
   }
 
   if (closed.length) {
@@ -155,7 +156,10 @@ function render(d) {
   h += '</tbody></table></section>';
   h += '<p class="sect__note" style="margin-top:12px">综合 ＝ 油品40 ＋ 非油10 ＋ 人效12 ＋ 现场管理38（一级5＋运营28＋神访5）− 投诉 ＋ 进步，' +
     '封顶 120。不设等级；同分时油品段高者排前；触发一票否决的站置末位。' +
-    '一级考核当年未抽查的站按「5 ×（其余项得分 ÷ 95）」折算补齐，表中标 NA。</p>';
+    '一级考核当年未抽查的站按「5 ×（其余项得分 ÷ 95）」折算补齐，表中标 NA。' +
+    '<br>人效段：会计月累计当量（汽油×39＋柴油×27）÷ 已计天数 ÷（月均在岗−4），' +
+    '≤基准 49 得 12×人效÷49，超基准得 12＋8×(人效−49)÷49，封顶 20。' +
+    '本页人效段为当月实况，与「人效看板」同源。</p>';
 
   document.getElementById('app').innerHTML = h;
 }

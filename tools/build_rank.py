@@ -31,7 +31,8 @@
 V6 口径（与 docs/assets/config.js / engine.js 完全一致）：
   油品40(封顶50) + 非油10(封顶12) + 人效12(封顶20) + 现场管理38
   （一级5 + 二级28 + 神访5）− 投诉 + 进步，综合封顶 120
-  人效段固定取 docs/data/stations.json（V6 基准 49），不由本脚本重算。
+  人效段唯一数源 = docs/data/efficiency.json（当月会计月实际累计 ÷ 已计天数 ÷（月均在岗−4）），
+  与 eff.html 人效看板同源同值；stations.json 的三年日均仅作参考，不再参与计分。
   NA 统一折算：某项 NA 时，该项得分 = 该项基准分 ×（其余项得分 ÷ 其余项基准满分）。
 """
 import argparse
@@ -41,6 +42,7 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIONS = os.path.join(ROOT, "docs", "data", "stations.json")
+EFFICIENCY = os.path.join(ROOT, "docs", "data", "efficiency.json")
 OUT = os.path.join(ROOT, "docs", "data", "rank.json")
 
 # 与 config.js 保持一致
@@ -132,7 +134,21 @@ def main():
 
     with open(STATIONS, encoding="utf-8") as f:
         base = json.load(f)["stations"]
-    eff_map = {x["name"]: x for x in base}
+
+    # 人效段唯一数源：当月实况（会计月累计当量 ÷ 已计天数 ÷ (月均在岗 − 4)）
+    if not os.path.exists(EFFICIENCY):
+        raise SystemExit(
+            "缺少 docs/data/efficiency.json：人效段无当月数据源。\n"
+            "请先跑金山「eff_push.js」或在本地执行 tools/build_efficiency.py 生成。")
+    with open(EFFICIENCY, encoding="utf-8") as f:
+        eff_doc = json.load(f)
+    eff_map = {x["name"]: x for x in eff_doc["stations"]}
+    eff_meta = {
+        "month": eff_doc.get("month"),
+        "dataMode": eff_doc.get("dataMode"),
+        "days": (eff_doc.get("period") or {}).get("elapsed"),
+        "benchmark": (eff_doc.get("params") or {}).get("benchmark"),
+    }
 
     src, official = None, False
     if args.input:
@@ -215,8 +231,18 @@ def main():
         "updatedAt": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "dataMode": "official" if official else "demo",
         "basis": "油品40(50) + 非油10(12) + 人效12(20) + 现场管理38(一级5+二级28+神访5) − 投诉 + 进步，封顶120；不设等级",
-        "note": ("科室核算数据" if official else
-                 "演示数据：油品/非油/一级/运营/神访为模拟值，人效段取自定稿基准表。正式发榜请用 --input 传入科室核算数据。"),
+        "effSource": {
+            "file": "docs/data/efficiency.json",
+            "mode": eff_meta["dataMode"],
+            "month": eff_meta["month"],
+            "elapsedDays": eff_meta["days"],
+            "benchmark": eff_meta["benchmark"],
+            "formula": "人效 = 会计月累计当量 ÷ 已计天数 ÷（月均在岗 − 4）；当量 = 汽油×39 + 柴油×27"
+        },
+        "note": ("科室核算数据；人效段与 eff.html 人效看板同源（当月会计月实际累计）"
+                 if official else
+                 "演示数据：油品/非油/一级/运营/神访为模拟值，人效段取自 efficiency.json 当月实况。"
+                 "正式发榜请用 --input 传入科室核算数据。"),
         "peerMysteryAverage": r(peer_avg),
         "stations": rows
     }

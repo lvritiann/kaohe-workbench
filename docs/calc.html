@@ -92,22 +92,38 @@
 <script>
 UI.tabbar('calc');
 
-var ST = null, CUR = null;
+var ST = null, CUR = null, EFF = {}, EFFMETA = {};
 
-fetch('data/stations.json', { cache: 'no-cache' })
-  .then(function (r) { return r.json(); })
-  .then(function (j) {
-    ST = j;
-    var sel = document.getElementById('fStation');
-    j.stations.forEach(function (s) {
-      var op = document.createElement('option');
-      op.value = s.name;
-      op.textContent = s.name + '　人效 ' + s.eff + ' · 人效段 ' + s.effScore;
-      sel.appendChild(op);
-    });
-    sel.addEventListener('change', function () { pick(this.value); });
-    document.getElementById('srcNote').textContent = j.basis + '（已逐站复核，与定稿附录A一致）';
-  })
+Promise.all([
+  fetch('data/stations.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }),
+  fetch('data/efficiency.json', { cache: 'no-cache' }).then(function (r) { return r.json(); })
+    .catch(function () { return null; })
+]).then(function (res) {
+  var j = res[0], ef = res[1];
+  ST = j;
+  if (ef && ef.stations) {
+    ef.stations.forEach(function (x) { EFF[x.name] = x; });
+    EFFMETA = {
+      month: ef.month,
+      days: (ef.period || {}).elapsed || (ef.period || {}).days,
+      mode: ef.dataMode
+    };
+  }
+  var sel = document.getElementById('fStation');
+  j.stations.forEach(function (s) {
+    var op = document.createElement('option');
+    op.value = s.name;
+    var e = EFF[s.name];
+    op.textContent = s.name + '　当月人效 ' + (e ? e.monthEff : s.eff) +
+      ' · 人效段 ' + (e ? e.effScore : s.effScore);
+    sel.appendChild(op);
+  });
+  sel.addEventListener('change', function () { pick(this.value); });
+  document.getElementById('srcNote').textContent = EFFMETA.month
+    ? ('人效数源：efficiency.json · ' + EFFMETA.month + ' 会计月第 ' + EFFMETA.days + ' 天实况'
+       + '（月累计当量 ÷ 已计天数 ÷（月均在岗−4））')
+    : (j.basis + '（基准数据，非当月实况）');
+})
   .catch(function () {
     document.getElementById('srcNote').textContent = '基准数据未加载，请手动填写。';
   });
@@ -128,11 +144,20 @@ function pick(name) {
   document.getElementById('paramCard').style.display = 'block';
   document.getElementById('oilCard').style.display = 'block';
   document.getElementById('manual').style.display = 'none';
-  /* stations.json 存的是三年平均「日均吨」；页面按会计月累计填，故 × 天数 */
-  document.getElementById('days').value = 30;
-  document.getElementById('gas').value = (s.gasTon * 30).toFixed(1);
-  document.getElementById('diesel').value = (s.dieselTon * 30).toFixed(1);
-  document.getElementById('head').value = s.headcount;
+  /* 默认值取当月实况：efficiency.json 存的是会计月累计吨 + 已计天数；
+     缺失时回退 stations.json 的三年平均日均吨 × 30 */
+  var e = EFF[name];
+  if (e) {
+    document.getElementById('days').value = e.days || 30;
+    document.getElementById('gas').value = e.monthGas.toFixed(1);
+    document.getElementById('diesel').value = e.monthDiesel.toFixed(1);
+    document.getElementById('head').value = e.monthlyHead;
+  } else {
+    document.getElementById('days').value = 30;
+    document.getElementById('gas').value = (s.gasTon * 30).toFixed(1);
+    document.getElementById('diesel').value = (s.dieselTon * 30).toFixed(1);
+    document.getElementById('head').value = s.headcount;
+  }
   document.getElementById('nonSales').value = 100;
   document.getElementById('nonMargin').value = 100;
   document.getElementById('insp').value = 90;
