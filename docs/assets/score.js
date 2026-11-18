@@ -1,4 +1,4 @@
-/* 现场检查打分 V5
+/* 现场检查打分 V6
    依据《目标责任考核方案》V1.0（V6）：运营检查 100 分制 → 折算 28 分；6 项一票否决。
    交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
    导出：检查表 Excel ＋ 照片包打成一个 zip；照片只进金山在线表，GitHub 不存。
@@ -459,7 +459,7 @@
         zip.file(base + '.xlsx', xlsxB64, { base64: true });
 
         var manifest = {
-          version: 'V5', station: S_.station, month: S_.month, inspector: USER.name,
+          version: 'V6', station: S_.station, month: S_.month, inspector: USER.name,
           submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
           veto: veto.failed, photos: []
         };
@@ -509,7 +509,7 @@
 
   function buildWorkbook(res, veto, ts) {
     var aoa = [];
-    aoa.push(['二级运营检查评分表（V5 · 目标责任考核 V1.0）']);
+    aoa.push(['二级运营检查评分表（V6 · 目标责任考核 V1.0）']);
     aoa.push([]);
     aoa.push(['油站', S_.station, '检查月份', S_.month]);
     aoa.push(['检查人', USER.name, '提交时间', fmt(ts)]);
