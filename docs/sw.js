@@ -1,5 +1,5 @@
 /* 离线缓存：站点信号差时也能打开打分页 */
-var CACHE = 'kaohe-v6-9';
+var CACHE = 'kaohe-v6-10';
 var SHELL = [
   './',
   'index.html',
@@ -49,6 +49,19 @@ self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   var url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
+
+  // config.js 是配置：改了要立刻生效。走 cache-first 的话，填了提交地址也传不下去，
+  // 用户不改 CACHE 版本就永远拿旧配置。
+  if (url.pathname.indexOf('/assets/config.js') !== -1) {
+    e.respondWith(
+      fetch(e.request).then(function (res) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        return res;
+      }).catch(function () { return caches.match(e.request); })
+    );
+    return;
+  }
 
   // JSON 数据：先网络后缓存，保证排名能更新；断网再用缓存
   if (url.pathname.indexOf('/data/') !== -1) {
