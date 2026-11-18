@@ -1,8 +1,10 @@
 /* 现场检查打分 V6
    依据《目标责任考核方案》V1.0（V6）：运营检查 100 分制 → 折算 28 分；6 项一票否决。
    交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
-   导出：检查表 Excel ＋ 照片包打成一个 zip；交付优先走系统分享（可直接发微信给科室），
-        分享不可用时才退回浏览器下载。照片只进金山在线表，GitHub 不存。
+   提交：点确认后直接把 73 项结果 + 扣分原因 + 佐证照片 POST 给金山文档里的 AirScript
+        webhook，由服务器端写「检查明细」并把照片落成 =IMAGE(直链)，格子里直接出图。
+        网址与令牌存在各站长本机（localStorage），不进源码。
+        未配置 webhook 时才退回老路：打包 zip → 系统分享 → 浏览器下载。
    压缩：每张佐证照片按真实字节数迭代压到 500KB 以内再存草稿。
 */
 (function () {
@@ -245,8 +247,18 @@
     h += '<div class="field" style="margin-top:0"><label>问题说明（必填）</label>';
     h += '<input type="text" data-note="' + key + '" placeholder="写清哪里不合格" value="' + esc(notes.reason || '') + '">';
     h += '</div>';
+    /* ★ 拍照与相册拆成两个入口，不再只有一个「选择文件」。
+       单放一个 accept="image/*" 的 input：安卓弹「相机 / 文件」二选一，多一步；
+       iOS 直接给相册，现场想拍还得先退出。
+       带 capture="environment" 的 input 会直接进后置摄像头，拍完即回页面；
+       但它顶掉了相册入口，所以另给一个不带的，照片已在手机里时仍能选。
+       透明 input 铺满整块 label：点哪儿都等价于点 input 本身，
+       不依赖 label[for] 转发（部分 X5 内核对转发支持不稳）。 */
     h += '<div class="field"><label>佐证照片（可选，最多 ' + PHOTO_PER_ITEM + ' 张）</label>';
-    h += '<input type="file" accept="image/*" multiple data-photo="' + key + '" style="font-size:13px;padding:8px">';
+    h += '<div class="photo-pick">';
+    h += '<label class="photo-cap">拍照<input type="file" accept="image/*" capture="environment" data-photo="' + key + '"></label>';
+    h += '<label class="photo-cap">从相册选<input type="file" accept="image/*" multiple data-photo="' + key + '"></label>';
+    h += '</div>';
     h += '<div class="photo-row" id="photos-' + key + '">';
     photos.forEach(function (p, i) {
       /* kb 是压缩后的真实体积（老草稿里的照片没有这个字段，就不显示）：
@@ -582,9 +594,191 @@
     $('doSubmit').addEventListener('click', function () { generate(res, veto); });
   }
 
+  /* ---------------- 直落金山表 ----------------
+     提交不再打包下载：把 73 项结果 + 扣分原因 + 佐证照片一次性 POST 给金山文档里
+     那段 AirScript 的 webhook，由它在服务器端写「检查明细」，照片列写 =IMAGE(直链)。
+     网址与令牌不入源码 —— 存在本机 localStorage，首次提交时填一次。
+
+     ★ 为什么令牌不写进 JS：这个页面是公开的 GitHub Pages，源码谁都能看。
+       AirScript-Token 是全账号级凭据（能读写你名下所有金山文档），
+       写进源码等于公开它。所以只在站长本机留一份。 */
+
+  var REPORT_KEY = 'kaohe_report_cfg';
+
+  function reportCfg() {
+    var local = {};
+    try { local = JSON.parse(localStorage.getItem(REPORT_KEY) || '{}') || {}; } catch (e) { }
+    var def = (C && C.report) || {};
+    return { url: local.url || def.url || '', token: local.token || def.token || '' };
+  }
+
+  function saveReportCfg(url, token) {
+    localStorage.setItem(REPORT_KEY, JSON.stringify({ url: url, token: token }));
+  }
+
+  function showReportSetup(tip) {
+    var cfg = reportCfg();
+    var b = '<div class="sheet__grip"></div><h3>一次性设置</h3>';
+    b += '<div class="hint">本机首次提交前，把「提交地址」填一次即可。只存这台手机，不写进网页源码。' +
+      '若走中转服务，令牌留空——它在中转端，手机不需要。</div>';
+    if (tip) b += '<div class="err">' + esc(tip) + '</div>';
+    b += '<div style="margin:14px 0 6px;font-size:13px;color:#666">提交地址</div>';
+    b += '<input id="rpUrl" type="url" placeholder="https://…/sync_task 或 中转服务地址" ' +
+      'value="' + esc(cfg.url) + '" style="width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px">';
+    b += '<div style="margin:14px 0 6px;font-size:13px;color:#666">脚本令牌（走中转可留空）</div>';
+    b += '<input id="rpTok" type="text" placeholder="AirScript-Token" value="' + esc(cfg.token) + '" ' +
+      'style="width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px">';
+    b += '<div class="hint" style="margin-top:12px">取法：打开「考核工作台数据源」→ 效率 → 高级开发 → ' +
+      'AirScript 脚本编辑器 → 工具栏「脚本令牌」创建；脚本列表里该脚本的 ··· → 复制 webhook 链接。</div>';
+    b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">取消</button>' +
+      '<button class="btn btn--primary" id="rpSave">保存并提交</button></div>';
+    showSheet(b);
+    $('rpSave').addEventListener('click', function () {
+      var u = $('rpUrl').value.trim(), t = $('rpTok').value.trim();
+      /* 直连金山才必须要令牌；走中转时令牌在中转端，留空即可 */
+      if (!u) { toast('请填提交地址'); return; }
+      if (/\/api\/v3\/ide\//.test(u) && !t) { toast('直连金山时必须填脚本令牌'); return; }
+      saveReportCfg(u, t);
+      closeSheet();
+      setTimeout(function () { onSubmit(); }, 120);
+    });
+  }
+
+  /* 73 项全量上传（不只是扣分项）：脚本要拿全部标准分才能算准折算分，
+     只传扣分项的话分母凑不出 100，运营段会算错。 */
+  function buildPayload(res, veto) {
+    var items = DATA.items.map(function (it) {
+      var a = S_.items[it.no] || 'ok';
+      return {
+        no: it.no, cat: it.cat, name: it.name, std: it.score,
+        res: a, note: (S_.notes[it.no] || {}).reason || ''
+      };
+    });
+    var photos = [];
+    function collect(no, arr) {
+      (arr || []).forEach(function (p) {
+        var m = /^data:([^;]+)/.exec(p.data || '');
+        photos.push({ no: no, name: p.name || '', data: p.data, mime: m ? m[1] : 'image/jpeg' });
+      });
+    }
+    DATA.items.forEach(function (it) { collect(it.no, S_.photos[it.no]); });
+    DATA.veto.forEach(function (v) { collect('v' + v.no, S_.photos['v' + v.no]); });
+
+    /* 一票否决也要单独落行：序号写 v1…v6。不落行的话它的照片在明细里没有落点，
+       而且 record_sync.py 的「一票否决项」列会读不到。 */
+    var vetoItems = [];
+    DATA.veto.forEach(function (v) {
+      if (S_.veto[v.no] !== 'no') return;
+      vetoItems.push({
+        no: 'v' + v.no, name: v.name,
+        note: (S_.notes['v' + v.no] || {}).reason || ''
+      });
+    });
+
+    return {
+      station: S_.station, month: S_.month, inspector: USER.name,
+      submittedAt: fmt(new Date()), type: '运营检查',
+      items: items, veto: veto.failed, vetoItems: vetoItems, photos: photos
+    };
+  }
+
+  function submitOnline(res, veto) {
+    var cfg = reportCfg();
+    if (!cfg.url) { showReportSetup(); return; }
+
+    var payload = buildPayload(res, veto);
+    var nPic = payload.photos.length;
+    showSheet('<div class="sheet__grip"></div><h3>正在提交</h3>' +
+      '<div class="hint" id="subHint">正在上传 ' + nPic + ' 张照片并写入金山表格，请勿关闭页面…</div>');
+
+    var body = JSON.stringify({ Context: { argv: { payload: payload } } });
+
+    /* 请求体过大金山会拒收，也会让手机在弱网下反复超时。9MB 是留了余量的经验上限。 */
+    var mb = body.length / 1048576;
+    if (mb > 9) {
+      showSheet('<div class="sheet__grip"></div><h3>照片太多</h3>' +
+        '<div class="warn" style="margin:0 0 12px">本次合计约 <b>' + mb.toFixed(1) + 'MB</b>，超过单次提交 9MB 上限。</div>' +
+        '<div class="hint">删掉几张不关键的佐证照片再提交；或者分两次检查、分两次提交（同站同月以最新一次为准）。</div>' +
+        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回修改</button></div>');
+      return;
+    }
+
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 120000) : null;
+
+    /* 直连金山：地址里带 /api/v3/ide/，必须带脚本令牌。
+       走中转（Worker / 自建服务）：令牌与 GitHub 令牌都在中转端，手机端一律不带。
+       这样即使网页源码公开、手机丢了，也拿不到能操作全部金山文档的凭据。 */
+    var direct = /\/api\/v3\/ide\//.test(cfg.url);
+    var hdrs = { 'Content-Type': 'application/json' };
+    if (direct) hdrs['AirScript-Token'] = cfg.token;
+
+    fetch(cfg.url, {
+      method: 'POST',
+      headers: hdrs,
+      body: body,
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      if (timer) clearTimeout(timer);
+      return r.text();
+    }).then(function (txt) {
+      var outer = {};
+      try { outer = JSON.parse(txt) || {}; } catch (e) { }
+      /* 金山的外层是 {code, data:{result:"<脚本 return 的字符串>"}}；result 可能是字符串也可能已是对象 */
+      var inner = outer;
+      if (outer && outer.data) {
+        var r0 = outer.data.result;
+        if (typeof r0 === 'string') {
+          try { inner = JSON.parse(r0) || { ok: false, error: r0 }; }
+          catch (e) { inner = { ok: false, error: r0 }; }
+        } else if (r0 && typeof r0 === 'object') {
+          inner = r0;
+        }
+      }
+      if (inner && inner.ok) { submitOk(inner); return; }
+      submitFail((inner && (inner.error || (inner.log || []).join(' | '))) || txt.substring(0, 300));
+    }).catch(function (e) {
+      if (timer) clearTimeout(timer);
+      /* 浏览器把它们拦在门外时请求其实可能已经到了金山 —— 不能断言"没提交" */
+      var why = (e && e.name === 'AbortError') ? '等待超时（2 分钟）' : ((e && e.message) || String(e));
+      submitFail('连不上：' + why +
+        '\n\n可能是浏览器跨域拦截。请把这个地址用系统浏览器（不是微信里）再打开一次重试；' +
+        '若金山表格里已经出现本站本月记录，说明其实已经落表，不要重复提交。');
+    });
+  }
+
+  function submitOk(inner) {
+    S.removeDraft(S_.station + '|' + S_.month);
+    var b = '<div class="sheet__grip"></div><h3>已落表</h3>';
+    b += '<div class="kv"><span>油站 / 月份</span><b>' + esc(inner.station) + ' · ' + esc(inner.month) + '</b></div>';
+    b += '<div class="kv"><span>折算得分</span><b>' + Number(inner.converted).toFixed(2) + ' / 100</b></div>';
+    b += '<div class="kv kv--total"><span>运营段</span><b>' + Number(inner.op).toFixed(2) + ' / ' + C.seg.inspect.base + '</b></div>';
+    b += '<div class="kv"><span>写入行数</span><b>' + inner.rows + ' 行' +
+      (inner.photos ? ' · ' + inner.photos + ' 张照片已入表' : '') + '</b></div>';
+    if (inner.log && inner.log.length) {
+      b += '<div class="hint" style="margin-top:12px;font-size:12px;line-height:1.7">' +
+        inner.log.map(esc).join('<br>') + '</div>';
+    }
+    b += '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">完成</button></div>';
+    showSheet(b);
+  }
+
+  function submitFail(msg) {
+    var b = '<div class="sheet__grip"></div><h3>没能落表</h3>';
+    b += '<div class="err" style="white-space:pre-wrap">' + esc(msg) + '</div>';
+    b += '<div class="hint">打分内容仍在本机草稿里，不会丢。修好后可以再点一次提交。</div>';
+    b += '<div class="sheet__acts"><button class="btn btn--ghost" id="reCfg">改设置</button>' +
+      '<button class="btn btn--primary" onclick="closeSheet()">返回</button></div>';
+    showSheet(b);
+    if ($('reCfg')) $('reCfg').addEventListener('click', function () { showReportSetup(); });
+  }
+
   /* 打包前的总量闸：超限既不静默失败，也不闷头去造一个可能把手机 OOM 掉的 blob。
      ★ 阈值与文案里的数字都取自 PHOTO_TOTAL_MAX，改一处即可，不要写死两个地方。 */
   function generate(res, veto) {
+    /* 配了直落表就走在线提交，不再打包 —— 打包下载在微信内核里本来就点不开 */
+    if (reportCfg().url) { submitOnline(res, veto); return; }
+
     var totalKB = photoTotalKB();
     if (totalKB <= PHOTO_TOTAL_MAX) { doPack(res, veto); return; }
 
