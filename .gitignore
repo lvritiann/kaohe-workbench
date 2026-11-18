@@ -8,6 +8,9 @@
 # 本机工具：Python 脚本入库留档，其余本地文件不入库
 tools/*
 !tools/*.py
+!tools/_t_*.js
+# QA 临时验收脚本（可随时重跑重生成，不入库）
+tools/_qa_*
 # tools/airscript/ 内含明文令牌，整个目录保持排除，禁止入库
 inbox/
 .workbuddy/

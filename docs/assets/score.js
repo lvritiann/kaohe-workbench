@@ -17,7 +17,15 @@
   var $ = function (id) { return document.getElementById(id); };
   var esc = UI.esc;
   function pad(n) { return (n < 10 ? '0' : '') + n; }
-  function nowMonth() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+  /* 会计月：上月 26 日 — 本月 25 日，26 日及以后已属下一个会计月。
+     ★ 月度节奏是 25–31 日现场检查；若按日历月取值，26 日之后打的检查会被记到上一个月，
+       与 record_sync.py 的会计月对不上 → 扣分整批落不进记录表。 */
+  function nowMonth() {
+    if (E && E.currentMonth) return E.currentMonth();
+    var d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1;
+    if (d.getDate() >= 26) { m += 1; if (m > 12) { m = 1; y += 1; } }
+    return y + '-' + pad(m);
+  }
   function fmt(d) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
@@ -161,7 +169,7 @@
       h += '<option value="' + esc(s) + '"' + (s === S_.station ? ' selected' : '') + '>' + esc(s) + '</option>';
     });
     h += '</select></div>';
-    h += '<div class="field"><label>检查月份</label><input type="month" id="fMonth" value="' + S_.month + '"></div>';
+    h += '<div class="field"><label>会计月（上月26日—本月25日）</label><input type="month" id="fMonth" value="' + S_.month + '"></div>';
     h += '<div class="field"><label>检查人</label><input type="text" value="' + esc(USER.name) + '" disabled></div>';
     h += '</section>';
 
@@ -458,10 +466,33 @@
         var zip = new JSZip();
         zip.file(base + '.xlsx', xlsxB64, { base64: true });
 
+        /* 扣分/NA 清单：落表的权威依据。
+           ★ 不能只靠 photos —— 照片是可选的，而扣分项必须逐项进「检查明细」，
+             否则 record_sync.py 找不到该项就按「符合」给满分，等于白扣。 */
+        var deductions = [];
+        DATA.items.forEach(function (it) {
+          var a = S_.items[it.no];
+          if (a !== 'no' && a !== 'na') return;
+          deductions.push({
+            itemNo: it.no, item: it.name, cat: it.cat, std: it.score,
+            result: a === 'na' ? 'NA' : '扣分',
+            score: a === 'na' ? null : 0,
+            reason: (S_.notes[it.no] || {}).reason || ''
+          });
+        });
+        DATA.veto.forEach(function (v) {
+          if (S_.veto[v.no] !== 'no') return;
+          deductions.push({
+            itemNo: 'v' + v.no, item: v.name, cat: '一票否决', std: null,
+            result: '否决', score: null,
+            reason: (S_.notes['v' + v.no] || {}).reason || ''
+          });
+        });
+
         var manifest = {
           version: 'V6', station: S_.station, month: S_.month, inspector: USER.name,
           submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
-          veto: veto.failed, photos: []
+          veto: veto.failed, deductions: deductions, photos: []
         };
         DATA.items.forEach(function (it) {
           if (S_.items[it.no] !== 'no') return;
@@ -511,7 +542,7 @@
     var aoa = [];
     aoa.push(['二级运营检查评分表（V6 · 目标责任考核 V1.0）']);
     aoa.push([]);
-    aoa.push(['油站', S_.station, '检查月份', S_.month]);
+    aoa.push(['油站', S_.station, '会计月', S_.month]);
     aoa.push(['检查人', USER.name, '提交时间', fmt(ts)]);
     aoa.push([]);
     aoa.push(['第一部分　一票否决项（默认合格）']);

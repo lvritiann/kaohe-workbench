@@ -138,14 +138,52 @@ def main():
     ])
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     veto_text = "、".join(m.get("veto", []) or [])
-    lines = ["\t".join(cols)]
+
+    # ★ 一行一个「扣分 / NA / 否决」项，不是一行一张照片。
+    #   照片是可选的，扣分项必须逐项进检查明细；漏项 → record_sync 按「符合」给满分。
+    placeholder = False
+    if "deductions" in m:
+        items = list(m.get("deductions") or [])
+    else:
+        print("[WARN] manifest 无 deductions 字段（旧版打分页导出的包）。")
+        print("       将按有照片的项降级生成，无照片的扣分项会漏记，请改用新版打分页重新导出。")
+        items, seen = [], set()
+        for q in queue:
+            k = q.get("itemNo")
+            if k in seen:
+                continue
+            seen.add(k)
+            items.append({"itemNo": k, "item": q.get("item", ""), "cat": "",
+                          "std": None, "result": "扣分", "score": None,
+                          "reason": q.get("reason", "")})
+    if not items:
+        # ★「检查了但一项没挑出毛病」是正常业务结果，不是空包。
+        #   必须留一条占位行，让该站该月在「检查明细」里有痕迹；
+        #   否则 record_sync 会把它当「未检查」整块留空，白丢运营段 28 分。
+        placeholder = True
+        items = [{
+            "itemNo": "", "item": "本次未发现不符合项", "cat": "", "std": None,
+            "result": "符合", "score": None, "reason": ""
+        }]
+        print("[INFO] 本次未发现任何不符合项 → 生成 1 条占位行，标注该站已检查且满分。")
+
+    by_no = {}
     for q in queue:
+        by_no.setdefault(q.get("itemNo"), []).append(q)
+
+    lines = ["\t".join(cols)]
+    for it in items:
+        k = it.get("itemNo")
+        names = "、".join([p.get("filename", "") for p in (by_no.get(k) or [])])
         row = {
             "月份": month, "站名": station, "表类型": "运营检查",
-            "序号": q["itemNo"], "大类": "", "检查项目": q["item"],
-            "标准分": "", "得分": "", "结果": "扣分", "说明": q["reason"],
+            "序号": k, "大类": it.get("cat", ""), "检查项目": it.get("item", ""),
+            "标准分": "" if it.get("std") in (None, "") else it.get("std"),
+            "得分": "" if it.get("score") in (None, "") else it.get("score"),
+            "结果": it.get("result") or "扣分",
+            "说明": it.get("reason", ""),
             "检查人": inspector, "提交时间": submitted,
-            "照片文件名": q["filename"], "照片附件ID": "",
+            "照片文件名": names, "照片附件ID": "",
             "折算得分(100)": m.get("converted", ""),
             "运营段得分(28)": m.get("inspectScore", ""),
             "一票否决项": veto_text,
@@ -157,16 +195,34 @@ def main():
     with open(os.path.join(dest, "检查明细_导入行.tsv"), "w", encoding="utf-8-sig") as f:
         f.write("\n".join(lines) + "\n")
 
+    # ★ 会计月一致性：submittedAt 落在 26 日及以后 → 应属下一个会计月。
+    #   不一致会导致 record_sync 找不到对应月份 sheet，整批扣分落不进记录表。
+    acct_warn = ""
+    try:
+        _sd = dt.datetime.strptime(str(submitted)[:10], "%Y-%m-%d").date()
+        _ay, _am = (_sd.year + 1, 1) if (_sd.month == 12 and _sd.day >= 26) else \
+                   ((_sd.year, _sd.month + 1) if _sd.day >= 26 else (_sd.year, _sd.month))
+        _acct = "%d-%02d" % (_ay, _am)
+        if month and _acct != month:
+            acct_warn = "会计月不一致：提交日 %s 属会计月 %s，包内记录的是 %s" % (
+                _sd.strftime("%Y-%m-%d"), _acct, month)
+            print("[WARN] " + acct_warn)
+    except Exception:
+        pass
+
     print("已拆包：" + dest)
     print("  站点 %s / 月份 %s / 检查人 %s" % (station, month, inspector))
     print("  折算得分 %s / 运营段 %s" % (m.get("converted"), m.get("inspectScore")))
     print("  否决：%s" % ("、".join(m.get("veto", [])) or "无"))
-    print("  照片 %d 张" % len(queue))
+    print("  扣分/NA/否决 %d 行 · 照片 %d 张（已按项合并到同一行）%s"
+          % (len(items), len(queue), "（含 1 条满分占位行）" if placeholder else ""))
     print("  ① wps_upload_queue.json    上传队列（含 attachmentId 待回填）")
     print("  ② kdocs_upload_payload.json  可直接上传的 base64 清单")
     print("  ③ 检查明细_导入行.tsv      可粘贴进金山「检查明细」")
     print("  目标表：%s" % (kd.get("link_url") or kd.get("file_id") or "（未配置 tools/config.json）"))
     print("  下一步：TSV 粘进在线表 → 上传照片拿 attachment_id → 插浮动图片 → 回填队列。")
+    if acct_warn:
+        print("  [注意] " + acct_warn)
 
 
 if __name__ == "__main__":
