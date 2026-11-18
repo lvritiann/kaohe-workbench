@@ -1,7 +1,9 @@
 /* 现场检查打分 V6
    依据《目标责任考核方案》V1.0（V6）：运营检查 100 分制 → 折算 28 分；6 项一票否决。
    交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
-   导出：检查表 Excel ＋ 照片包打成一个 zip；照片只进金山在线表，GitHub 不存。
+   导出：检查表 Excel ＋ 照片包打成一个 zip；交付优先走系统分享（可直接发微信给科室），
+        分享不可用时才退回浏览器下载。照片只进金山在线表，GitHub 不存。
+   压缩：每张佐证照片按真实字节数迭代压到 500KB 以内再存草稿。
 */
 (function () {
   var C = window.CFG, E = window.Engine, S = window.Store;
@@ -243,11 +245,14 @@
     h += '<div class="field" style="margin-top:0"><label>问题说明（必填）</label>';
     h += '<input type="text" data-note="' + key + '" placeholder="写清哪里不合格" value="' + esc(notes.reason || '') + '">';
     h += '</div>';
-    h += '<div class="field"><label>佐证照片（可选，最多 3 张）</label>';
+    h += '<div class="field"><label>佐证照片（可选，最多 ' + PHOTO_PER_ITEM + ' 张）</label>';
     h += '<input type="file" accept="image/*" multiple data-photo="' + key + '" style="font-size:13px;padding:8px">';
     h += '<div class="photo-row" id="photos-' + key + '">';
     photos.forEach(function (p, i) {
-      h += '<img class="thumb" src="' + p.data + '" data-delphoto="' + key + '|' + i + '" title="点击删除">';
+      /* kb 是压缩后的真实体积（老草稿里的照片没有这个字段，就不显示）：
+         检查人一眼能确认没超 500KB，不用等导出才发现被拒。 */
+      var tip = '点击删除' + (p.kb ? ' · 已压缩 ' + p.kb + 'KB' : '');
+      h += '<img class="thumb" src="' + p.data + '" alt="佐证照片" data-delphoto="' + key + '|' + i + '" title="' + esc(tip) + '">';
     });
     h += '</div></div>';
     h += '<button class="mini-btn" data-undo="' + (isVeto ? 'v' : 'i') + '|' + no + '">撤销扣分</button>';
@@ -255,24 +260,127 @@
     return h;
   }
 
+  /* ---------------- 照片压缩 ----------------
+     ★ 目标是「单张 ≤ 500KB 的硬保证」，不是「长边 1280 + q0.75 大概能行」。
+       科室要把照片导进金山在线表，超限的图会被拒；原实现没有字节校验，
+       所以 ≤500KB 只是碰巧成立 —— 换一台手机、换一张原图就不成立。
+     ★ 边长反而要从 1280 提到 1600：留证照片要能看清单据/表盘数字，
+       500KB 的预算够用，先把像素给足，再靠质量档把体积压下来。 */
+
+  var PHOTO_MAX_BYTE = 500 * 1024;                                  /* 单张上限 500KB */
+  var PHOTO_MAX_EDGE = 1600;                                        /* 长边上限 */
+  var PHOTO_Q = [0.82, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5];            /* 质量档，从高到低试 */
+  var PHOTO_SHRINK = 0.85, PHOTO_ROUNDS = 4;                        /* 质量见底后缩边重试 */
+  var PHOTO_PER_ITEM = 3;                                           /* 每项最多几张 */
+  /* ★ 单张 500KB 约束不住总量：73 项 × 3 张 × 500KB ≈ 100MB，JSZip 在安卓上造这么大的
+     blob 会 OOM 或长时间卡死，navigator.share 也会被系统直接拒。所以打包前先算总量。 */
+  var PHOTO_TOTAL_MAX = 30 * 1024;                               /* 打包总量上限 30MB */
+
+  /* 正在压缩、还没 push 进 S_.photos 的照片数（照片 key → 数量）。
+     ★ 名额必须在「用户选中那一刻」就占用：压缩是异步的，若等 push 完再算剩余名额，
+       同一 tick 里连发两次 change 会各自看到 length=0，两次都放行 3 张，最终存进 6 张。
+     不挂在 S_.photos 上、也不进草稿序列化，归零即删除这个 key。 */
+  var photoPending = {};
+
+  /* base64 的真实字节数：每 4 个字符还原 3 字节，末尾每个 '=' 代表 1 个填充字节。
+     不能用 (len - len/4*2) 之类的估算法，会少算，导致「以为刚好 500KB」其实超了。 */
+  function b64Bytes(b64) {
+    if (!b64) return 0;
+    var pad = 0;
+    if (b64.charAt(b64.length - 1) === '=') pad = b64.charAt(b64.length - 2) === '=' ? 2 : 1;
+    return Math.floor(b64.length * 3 / 4) - pad;
+  }
+
+  /* 单次编码：成功返回 { data, bytes, w, h }，canvas 不可用/被拒时返回 null */
+  function encodeJpeg(img, cv, ctx, w, h, q) {
+    cv.width = w; cv.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    var data;
+    try { data = cv.toDataURL('image/jpeg', q); } catch (e) { return null; }
+    /* ★ canvas 尺寸超限或内存不足时，toDataURL 可能返回 'data:,' 而不抛错。
+       不校验就会把一张空图存进照片数组，现场表现是「拍了照但导出里没有图」。 */
+    if (!data || data.indexOf('data:image/jpeg') !== 0) return null;
+    var b64 = data.split(',')[1] || '';
+    if (b64.length < 64) return null;
+    return { data: data, bytes: b64Bytes(b64), w: w, h: h };
+  }
+
   function compress(file, cb) {
     var fr = new FileReader();
+
+    /* ★ 失败也要回调 cb(null)：调用方靠这个回调把「在途名额」还回去，
+       漏了这一步，一张坏图会永久吃掉该照片 key 的一个位置。 */
+    function fail() { toast('图片读取失败，请换一张'); cb(null); }
+
     fr.onload = function (e) {
       var img = new Image();
       img.onload = function () {
-        var max = 1280, w = img.width, h = img.height;
-        if (w > max || h > max) {
-          var k = max / Math.max(w, h);
-          w = Math.round(w * k); h = Math.round(h * k);
+        var cv = document.createElement('canvas');
+        var ctx = cv.getContext('2d');
+        var iw = img.width, ih = img.height;
+        if (!ctx || !iw || !ih) { fail(); return; }
+
+        var k = PHOTO_MAX_EDGE / Math.max(iw, ih);
+        var w = k < 1 ? Math.round(iw * k) : iw;
+        var h = k < 1 ? Math.round(ih * k) : ih;
+
+        var best = null, round = 0, qi, r;
+        while (round <= PHOTO_ROUNDS) {
+          /* 同一尺寸下先把质量档逐格降到 0.5；还超说明瓶颈在像素量，再缩边重来 */
+          for (qi = 0; qi < PHOTO_Q.length; qi++) {
+            r = encodeJpeg(img, cv, ctx, w, h, PHOTO_Q[qi]);
+            if (!r) { fail(); return; }
+            best = r;
+            if (r.bytes <= PHOTO_MAX_BYTE) break;
+          }
+          if (best.bytes <= PHOTO_MAX_BYTE) break;
+          w = Math.max(1, Math.round(w * PHOTO_SHRINK));
+          h = Math.max(1, Math.round(h * PHOTO_SHRINK));
+          round++;
         }
-        var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        cb(cv.toDataURL('image/jpeg', 0.75));
+
+        if (best.bytes > PHOTO_MAX_BYTE) {
+          /* 兜底：超大原图 / canvas 有尺寸上限时可能真的压不进去。
+             用最省的一档再出一张，并取两次里更小的那个 —— 绝不越压越大。
+             同时明确告知，别让用户以为压缩失败了。 */
+          var s = Math.min(1, 1200 / Math.max(w, h));
+          var alt = encodeJpeg(img, cv, ctx, Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), 0.5);
+          if (alt && alt.bytes < best.bytes) best = alt;
+          toast('图片已压缩到最大程度');
+        }
+
+        cb({ data: best.data, w: best.w, h: best.h, kb: Math.round(best.bytes / 1024) });
       };
-      img.onerror = function () { toast('图片读取失败'); };
+      img.onerror = fail;
       img.src = e.target.result;
     };
+    fr.onerror = fail;
     fr.readAsDataURL(file);
+  }
+
+  /* 只统计「当前仍是扣分 / 否决」项的照片总量（KB）。
+     ★ 撤销扣分后照片仍留在 S_.photos 里（用户可能改回来，不该删他的图），但 generate()
+       只把 === 'no' 的项写进 zip，撤销掉的并不进包。这里若全量累加，撤销掉的照片会白占
+       额度，把人误拦在 30MB 闸外。
+     老草稿里的照片没有 kb 字段，按 base64 长度折算：每 4 个字符 3 字节，
+     前缀 'data:image/jpeg;base64,' 忽略不计 —— 宁可算大不算法小。
+     照片 key 的约定：扣分项用项号本身，否决项用 'v' + 否决号（与 deductHtml 一致）。 */
+  function photoTotalKB() {
+    var total = 0;
+    function add(key) {
+      (S_.photos[key] || []).forEach(function (p) {
+        if (!p || !p.data) return;
+        total += p.kb ? p.kb : (p.data.length * 3 / 4) / 1024;
+      });
+    }
+    for (var no in S_.items) {
+      if (Object.prototype.hasOwnProperty.call(S_.items, no) && S_.items[no] === 'no') add(no);
+    }
+    for (var vn in S_.veto) {
+      if (Object.prototype.hasOwnProperty.call(S_.veto, vn) && S_.veto[vn] === 'no') add('v' + vn);
+    }
+    return total;
   }
 
   /* ---------------- 事件 ---------------- */
@@ -333,15 +441,38 @@
     $('app').addEventListener('change', function (e) {
       var k = e.target.getAttribute && e.target.getAttribute('data-photo');
       if (!k || !e.target.files) return;
-      var files = Array.prototype.slice.call(e.target.files, 0, 3);
       if (!S_.photos[k]) S_.photos[k] = [];
-      files.forEach(function (f) {
-        compress(f, function (data) {
-          S_.photos[k].push({ name: f.name, data: data });
+
+      /* ★ 原来只 slice(0,3) 限「这一次选几张」，跨次累加不受限，第 4、5 次还能继续加，
+         与界面上「最多 3 张」的承诺不符。改成按该项已有张数算剩余名额。 */
+      var picked = Array.prototype.slice.call(e.target.files, 0);
+      e.target.value = '';   /* 先清空，否则同一张照片重选不会再触发 change */
+
+      /* 剩余名额 = 上限 − 已存张数 − 在途张数。在途那一项是关键：
+         压缩还没回来时，照片虽未 push，名额也已经被占住了。 */
+      var room = PHOTO_PER_ITEM - S_.photos[k].length - (photoPending[k] || 0);
+      if (room <= 0) {
+        toast(S_.photos[k].length >= PHOTO_PER_ITEM
+          ? '每项最多 ' + PHOTO_PER_ITEM + ' 张，请先删掉不要的'
+          : '已选满 ' + PHOTO_PER_ITEM + ' 张，照片还在压缩，请稍候');
+        return;
+      }
+      if (picked.length > room) {
+        toast('每项最多 ' + PHOTO_PER_ITEM + ' 张，已忽略 ' + (picked.length - room) + ' 张');
+      }
+      picked.slice(0, room).forEach(function (f) {
+        photoPending[k] = (photoPending[k] || 0) + 1;
+        compress(f, function (r) {
+          /* 成功与失败都要把在途名额还回去；归零就删掉这个 key，不留空壳 */
+          photoPending[k] = (photoPending[k] || 1) - 1;
+          if (!photoPending[k]) delete photoPending[k];
+          if (!r) return;   /* 压缩失败已在 compress 里 toast，既不占张数也不占名额 */
+          /* data 字段名不能改：generate() 靠 p.data.split(',')[1] 取原始字节写进 zip。
+             w/h/kb 只用于界面提示，帮检查人确认这张真的压到 500KB 以内了。 */
+          S_.photos[k].push({ name: f.name, data: r.data, w: r.w, h: r.h, kb: r.kb });
           refresh(); scheduleSave();
         });
       });
-      e.target.value = '';
     });
 
     $('btnSubmit').addEventListener('click', onSubmit);
@@ -451,7 +582,25 @@
     $('doSubmit').addEventListener('click', function () { generate(res, veto); });
   }
 
+  /* 打包前的总量闸：超限既不静默失败，也不闷头去造一个可能把手机 OOM 掉的 blob。
+     ★ 阈值与文案里的数字都取自 PHOTO_TOTAL_MAX，改一处即可，不要写死两个地方。 */
   function generate(res, veto) {
+    var totalKB = photoTotalKB();
+    if (totalKB <= PHOTO_TOTAL_MAX) { doPack(res, veto); return; }
+
+    var maxMb = Math.round(PHOTO_TOTAL_MAX / 1024);
+    var b = '<div class="sheet__grip"></div><h3>照片总量超限</h3>';
+    b += '<div class="warn" style="margin:0 0 12px">本次照片合计约 <b>' + (totalKB / 1024).toFixed(1) + 'MB</b>，' +
+      '超过 ' + maxMb + 'MB 上限。这么大一个包，手机上打包容易卡死或被系统拒绝。</div>';
+    b += '<div class="hint">建议分两次导出：先只录一部分扣分项（图也少），导出后再补录其余的。' +
+      '也可以删掉几张不影响判定的照片，<b>删掉的需重新拍</b>。</div>';
+    b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">返回修改</button>' +
+      '<button class="btn btn--primary" id="forcePack">仍然导出</button></div>';
+    showSheet(b);
+    $('forcePack').addEventListener('click', function () { doPack(res, veto); });
+  }
+
+  function doPack(res, veto) {
     var ts = new Date();
     var stamp = ts.getFullYear() + pad(ts.getMonth() + 1) + pad(ts.getDate()) + pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
     var base = '检查表_' + S_.station + '_' + S_.month + '_' + stamp;
@@ -514,13 +663,7 @@
         zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
         zip.generateAsync({ type: 'blob' }).then(function (blob) {
-          var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-          a.download = base + '.zip'; document.body.appendChild(a); a.click();
-          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-          S.removeDraft(S_.station + '|' + S_.month);
-          closeSheet();
-          showSheet('<div class="sheet__grip"></div><h3>已生成</h3><div class="hint">检查表与佐证照片已打包下载：<br><b>' + esc(base + '.zip') + '</b><br><br>发回计划经营科，由科室把照片导入金山在线表；GitHub 仓库不存照片。</div>' +
-            '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>');
+          offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month);
         }).catch(function (err) { packFail(err); });
       } catch (err) {
         packFail(err);
@@ -536,6 +679,160 @@
   function packFail(err) {
     showSheet('<div class="sheet__grip"></div><h3>生成失败</h3><div class="err">' + esc(err.message) + '</div>' +
       '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">关闭</button></div>');
+  }
+
+  /* ---------------- 导出下载 ----------------
+     ★ 安卓上 a[download] 不是可靠下载：微信 / 企业微信 / QQ 的 X5 内核会把 blob: 链接当成
+       普通超链接交给系统 Intent 去「打开」，而系统里没有能打开 application/zip 的应用，
+       于是弹出「未安装可打开该链接的应用」。那条提示是**手机系统**弹的，不是本页弹的。
+       同一段代码里又一个字都没校验下载结果，所以「实际失败却报成功」是必然。
+       这里改成「系统分享 → 内置浏览器提示 → a[download] → 手动兜底」四级降级，
+       并且只把确定发生的事写进提示文案。 */
+
+  /* 下载用的 MIME 用通用二进制：zip 类型会让安卓「按类型找应用」，而手机下载器未必注册了它 */
+  var DL_MIME = 'application/octet-stream';
+
+  function inAppBrowser() {
+    var u = navigator.userAgent || '';
+    /* 只拦 App 内置浏览器；MQQBrowser（独立 QQ 浏览器）自己有下载器，不拦 */
+    return /MicroMessenger/i.test(u) || /wxwork/i.test(u) || /QQ\//i.test(u);
+  }
+
+  function octetBlob(blob) {
+    try { return new Blob([blob], { type: DL_MIME }); } catch (e) { return blob; }
+  }
+
+  function saveViaLink(blob, filename) {
+    var url;
+    try { url = URL.createObjectURL(octetBlob(blob)); } catch (e) { return false; }
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    try { a.click(); } catch (e) {
+      if (a.parentNode) a.parentNode.removeChild(a);
+      try { URL.revokeObjectURL(url); } catch (e2) { }
+      return false;
+    }
+    /* ★ 60 秒后才回收对象 URL：低端安卓上「点下去」到「真正开始读数据」可能隔好几秒，
+       原来 1.5 秒就 revokeObjectURL 会把下载掐断，表现就是「点了没反应」。
+       60 秒后即使还没下完，浏览器通常已把数据接过去，撤回是安全的。 */
+    setTimeout(function () {
+      if (a.parentNode) a.parentNode.removeChild(a);
+      try { URL.revokeObjectURL(url); } catch (e) { }
+    }, 60000);
+    return true;
+  }
+
+  /* done 只会被调用一次，取值：
+     shared   系统分享面板真的走完了（唯一确定的成功）
+     download 下载请求已交给浏览器（但它不回话，不能算确定落盘）
+     inapp    微信 / 企业微信 / QQ 内置浏览器，注定存不了文件
+     cancel   用户自己关掉了分享面板，不是故障
+     manual   连对象 URL 都建不出来，只能手动兜底 */
+  function downloadBlob(blob, filename, title, done) {
+    var settled = false;
+    function settle(r) { if (settled) return; settled = true; done(r); }
+
+    function byLink() {
+      /* 内置浏览器做无效点击只会再弹一次系统报错，不如直接告诉用户换浏览器 */
+      if (inAppBrowser()) { settle('inapp'); return; }
+      settle(saveViaLink(blob, filename) ? 'download' : 'manual');
+    }
+
+    var file = null;
+    try { file = new File([blob], filename, { type: blob.type || 'application/zip' }); } catch (e) { file = null; }
+
+    if (file && navigator.canShare && navigator.share) {
+      var can = false;
+      try { can = navigator.canShare({ files: [file] }); } catch (e) { can = false; }
+      if (can) {
+        /* ★ 分享面板是移动端最顺的路径：用户可以直接选微信，把文件发回计划经营科。
+           Chrome 要求 share() 处在用户手势内，而打包耗时会把那个手势磨掉，于是可能抛
+           NotAllowedError —— 这不是故障，退回下载即可；结果面板上的「重新导出」按钮
+           在真正的手势里，会重新完整走一遍分享。 */
+        navigator.share({ files: [file], title: title }).then(function () {
+          settle('shared');
+        }).catch(function (err) {
+          if (err && err.name === 'AbortError') { settle('cancel'); return; }
+          byLink();
+        });
+        return;
+      }
+    }
+    byLink();
+  }
+
+  /* 结果面板：文件没到手之前，绝不说「已下载」 */
+  function offerExport(blob, base, title) {
+    var filename = base + '.zip';
+    var draftKey = S_.station + '|' + S_.month;
+
+    /* 文件名单独放一块、可选可长按：万一下载通道全都不通，这是唯一能让用户把
+       文件信息带走的兜底（让科室按名字去问、或换设备重导）。 */
+    function nameBlock() {
+      return '<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--line-hi);' +
+        'border-radius:10px;font:12px/1.6 ui-monospace,Consolas,monospace;' +
+        'word-break:break-all;user-select:text;-webkit-user-select:text">' + esc(filename) + '</div>';
+    }
+
+    function again() {
+      /* ★ 直接复用闭包里的 blob —— 那是同一次打包的产物，重发不必再打一遍包。
+         这也正是把 blob 放在闭包而不是模块作用域的理由：面板一销毁，引用自然消失，
+         几十 MB 的产物不会常驻内存。 */
+      showSheet('<div class="sheet__grip"></div><h3>正在导出</h3>' +
+        '<div class="hint">正在唤起系统分享 / 下载，请稍候…</div>');
+      downloadBlob(blob, filename, title, show);
+    }
+
+    function show(r) {
+      /* ★ 用户自己关掉分享面板不是失败：照旧保草稿，但给一个就地重试的入口，
+         重试走的是同一个 blob，不会再打一次包。 */
+      var h = '<div class="sheet__grip"></div>';
+      if (r === 'shared') {
+        S.removeDraft(draftKey);
+        h += '<h3>已调起分享</h3><div class="hint">选<b>微信</b>发给计划经营科即可，文件是：</div>' + nameBlock();
+        h += '<div class="hint">科室拿到后把照片导入金山在线表；GitHub 仓库不存照片。</div>';
+      } else if (r === 'download') {
+        /* ★ 这里不清草稿：下载是否真的落盘，浏览器不回话（就是这次要修的坑）。
+           拿「发了下载请求」当成功去删草稿，一旦静默失败就是「文件没到手、数据也没了」。 */
+        h += '<h3>已发起下载</h3><div class="hint">请到手机的「下载」或「文件管理」里查看：</div>' + nameBlock();
+        h += '<div class="hint">找不到文件就点下面的「重新导出」。本次草稿先留着 —— ' +
+          '确认文件到手后，下次进同一油站同一月会提示「已恢复上次草稿」，重新提交即覆盖。</div>';
+        toast('草稿先留着，不用现在清理');
+      } else if (r === 'cancel') {
+        h += '<h3>已取消分享</h3><div class="hint">文件没有发出，打分已存本机草稿，不会丢。可以直接再发一次：</div>' + nameBlock();
+      } else if (r === 'inapp') {
+        h += '<h3>这个浏览器存不了文件</h3>' +
+          '<div class="err">当前是微信 / 企业微信 / QQ 的内置浏览器。它会把这个文件当超链接交给手机系统去打开，' +
+          '系统里没有对应应用，于是弹「未安装可打开该链接的应用」——那一条是手机系统弹的。</div>' +
+          '<div class="hint">请点右上角 <b>···</b> → <b>在浏览器打开</b>，再回到本页重新导出。' +
+          '本次打分已存在本机草稿里，不会丢，换浏览器打开后会提示「已恢复上次草稿」。</div>' + nameBlock();
+      } else {
+        h += '<h3>没能保存</h3><div class="hint">这台机器的浏览器既不能分享也不能直接存文件。' +
+          '请长按复制下面的文件名交给科室，或换用手机自带浏览器重新导出：</div>' + nameBlock();
+      }
+
+      /* 内置浏览器 / 建不出链接时，重试注定同样失败，不给假希望 */
+      if (r === 'inapp' || r === 'manual') {
+        h += '<div class="sheet__acts"><button class="btn btn--primary" id="expClose">知道了</button></div>';
+      } else if (r === 'cancel') {
+        h += '<div class="sheet__acts"><button class="btn btn--ghost" id="expClose">稍后再说</button>' +
+          '<button class="btn btn--primary" id="expAgain">重新分享</button></div>';
+      } else {
+        h += '<div class="sheet__acts"><button class="btn btn--ghost" id="expClose">关闭</button>' +
+          '<button class="btn btn--primary" id="expAgain">重新导出</button></div>';
+      }
+      showSheet(h);
+      $('expClose').addEventListener('click', function () { window.closeSheet(); });
+      if ($('expAgain')) $('expAgain').addEventListener('click', again);
+    }
+
+    /* 不额外插一个等待面板：首次进来脚本已经在显示「正在打包」，
+       「重新导出」那条路径由 again() 自己先铺一个等待面板 */
+    downloadBlob(blob, filename, title, show);
   }
 
   function buildWorkbook(res, veto, ts) {

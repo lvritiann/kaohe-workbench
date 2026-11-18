@@ -66,9 +66,9 @@
                                                      └─ 月度留痕 history[]
 
 现场打分 score.html（选打分人 + 口令）
-   └─ 导出 检查表_站名_月份_时间戳.zip
+   └─ 导出 检查表_站名_月份_时间戳.zip（走系统分享，不再走浏览器下载）
         ├─ 检查表.xlsx（评分表 / 汇总）
-        ├─ photos/（压缩至长边 1280px）
+        ├─ photos/（单张硬压到 ≤500KB，长边 1600px）
         └─ manifest.json（站点、月份、检查人、扣分项、折算分）
    └─ 科室 python tools/read_check_zip.py <zip>
         └─ inbox/检查表/<包名>/：wps_upload_queue.json + kdocs_upload_payload.json + 检查明细_导入行.tsv
@@ -110,7 +110,7 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 
 | 时点 | 动作 |
 |---|---|
-| 25—31 日 | 现场检查打分，导出 zip |
+| 25—31 日 | 现场检查打分，导出并分享给科室 |
 | 次月 3 日 | 计划经营科汇总核对：从既有报表／在线驾驶舱取数（油品、非油、人数、投诉），**站端只确认结果、不另行填报** |
 | 次月 5 日 | 汇总四项，`python tools/build_rank.py` 生成 rank.json |
 | 次月 7 日 | 投诉统计并入 |
@@ -131,18 +131,26 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 1. **打不开登录页**：确认 `data/items.json`、`data/inspectors.json` 存在且为合法 JSON；联网打开一次让 SW 缓存。
 2. **口令不对**：手机号**后四位、含前导零**（`0045` 不能输成 `45`）、无空格；名单改过要联网打开一次并强刷（`/data/` 网络优先）。
 3. **点提交没反应**：每个扣分项必须填原因；提交弹层必须勾「已逐项核对」。
-4. **照片没进 zip**：手机需允许相册/相机权限；单张压缩到 1280px，最多 3 张。
+4. **照片没进 zip**：手机需允许相册/相机权限；单张**硬压到 ≤500KB**（长边 1600px，质量从 0.82 逐档降到 0.5，还超就缩边重试，最多 4 轮），每项最多 3 张。缩略图上会显示「已压缩 xxxKB」，拍完就能确认有没有超。
+   - 照片总量超过 **30MB** 会拒绝打包并提示（安卓上 `JSZip` 造太大的 blob 会 OOM）。真要导出可以点「仍然导出」，风险自负。
+   - 压不下来时（超大原图 / canvas 有尺寸上限）会提示「图片已压缩到最大程度」，不会静默出空图。
 5. **分数与定稿对不上**：确认用 39/27（不是 55.65/28.80、也不是 V5 的 56/28）、基准 49（不是 65）、月均在岗−4、**会计月实际天数 28/29/30/31**（不是写死 30，月中用已计天数）、毛利含烟草、分母不是当日人数。
 6. **排名页的人效和看板不一样**：只可能是一个原因 —— 有人把 `build_rank.py` 的 `eff_map` 改回读 `stations.json`。人效段**只能**读 `docs/data/efficiency.json`（当月实况）；`stations.json` 是三年日均参考值，不参与计分。改完跑 `python tools/build_rank.py`，15 站的 effScore 必须与 `efficiency.json` 逐站相等。
 7. **人效看板不刷新**：AirScript 末尾的 `main();` 不能删；看 `efficiency.json` 的 `updatedAt`；SW 对 `/data/` 是「先网络后缓存」，断网才用旧值。
 8. **照片进金山**：`python tools/read_check_zip.py <zip>` 一次产出三件 —— `检查明细_导入行.tsv`（粘贴）、`kdocs_upload_payload.json`（base64 直传清单）、`wps_upload_queue.json`（回填 attachmentId）。照片只进金山在线表，GitHub 零照片；在线表需先扩「照片文件名 / 照片附件ID」两列。
 9. **换打分人 / 改题目**：改对应 JSON → 推 GitHub → 升 sw 版本 → 页面强刷。
 10. **离线**：首次联网打开后自动缓存；断网可打分可导出，照片只存本地草稿。
+
+10b. **点提交后没下载到文件 / 弹出「未安装可打开该链接的应用」**：那条提示是**手机系统**弹的，不是本页弹的——微信／企微／QQ 的 X5 内核会把 `blob:` 当超链接交给系统 Intent，系统里没有能开 `application/zip` 的应用。
+    - 正常路径是**系统分享面板**：点提交 → 选微信 → 发给计划经营科。**不需要下载**。
+    - 若弹出的是「这个浏览器存不了文件」，说明你在内置浏览器里，点右上角 `···` → **在浏览器打开**，草稿会保留。
+    - 若走的是下载分支，文件在手机「下载」或「文件管理」里，**草稿会保留**（下载是否落盘浏览器不回话，不能拿草稿去赌）；找不到就点面板里的「重新导出」，它复用内存里已打好的包，不会重新压一遍。
+    - 取消分享不算失败：草稿保留，面板上有「重新分享」可直接重发。
 11. **停业站仍出现在榜上**：检查 `station_status.json` 的 `from`/`active` 与 `status.html` 签发的变更单是否已推送。
 12. **`git push` 卡住 / SIGTERM**：代理环境下 HTTP/2 大包会挂起。改用「显式令牌 + HTTP/1.1」（令牌只从 `.gh_token.txt` 读，不写入 git 配置）：
     `python -c "import subprocess;t=open('.gh_token.txt',encoding='utf-8').read().strip();subprocess.run(['git','-c','http.version=HTTP/1.1','-c','http.postBuffer=5242880','push','https://x-access-token:'+t+'@github.com/lvritiann/kaohe-workbench.git','main'])"`
     验证：看 GitHub 仓库最新提交 SHA 是否等于本地 `git rev-parse --short HEAD`。若 `git ls-remote` 报 `schannel: server closed abruptly`，只是网络抖动，用 API 查 `branches/main` 确认即可，不要盲目重推。
-13. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v6-5` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
+13. **登录慢 / 提交时提示「离线组件未就绪」**：登录页已改为只等名单，不再同步加载 862KB Excel + 96KB Zip 组件。若仍慢，多半是 Service Worker 旧缓存 —— 确认 `sw.js` 版本为 `kaohe-v6-7` 后强刷一次。导出组件在登录后后台加载；首次提交若未就绪会弹提示，联网打开一次即可，已填内容存在本机草稿不会丢。
 
 14. **`git push` 被拒（non-fast-forward）**：AirScript 每次运行都会直接向 GitHub 推 `docs/data/efficiency.json`，远端因此多出本地没有的提交。**千万不要 `--force`**，会丢掉实时人效数据。按第 12 条的显式令牌写法先 `git fetch <仓库地址> main`，再 `git rebase FETCH_HEAD`，最后重推。验证：线上 `efficiency.json` 的 `updatedAt` 没有回退成旧值。
 
@@ -198,7 +206,11 @@ GitHub Pages：仓库 `lvritiann/kaohe-workbench`，源 `main` / `docs`。
 - 现场打分 zip 经 `tools/read_check_zip.py` 产出的 `检查明细_导入行.tsv` 与「检查明细」19 列**逐列对齐**（已回归验证）。第 16 列表头已于 2026-11-18 由 `运营段得分(20)` 改为 `运营段得分(28)`。
 - 金山 `考核记录_2026.xlsx`（file_id `AWRLUu972xMZmPAPqxiVrxHZwKguaLcED`，<https://www.kdocs.cn/l/cgSIZe8kKXcA>）12 个 sheet × 30 块，每块尾行「运营段得分」标签已于 2026-11-18 全量改为 `(28)`（360 处）。
 - 「月度汇总」已填 2026-10 会计月 15 站真实柴汽吨数（来自中转簿），其余段留空待科室核算。华山该月仍标「正常营业」——关停自 2026-11-01 起，状态按会计月判定，不套当前状态。
-- 两表均冻结首行 + 前两列。照片经 `upload_attachment → create_float_images` 插入后，把 `attachment_id` 回填「照片附件ID」列；GitHub 仓库零照片。
+- 两表均冻结首行 + 前两列。GitHub 仓库零照片。
+- **★ 照片进表当前是断的（2026-11-18 实测）**：`read_check_zip.py` 产出的 `kdocs_upload_payload.json` 是按「`upload_attachment` → `create_float_images`」设计的，但**当前接入的金山连接器并没有暴露这两个工具**（实际调用返回「工具不存在」，`sheet.list_float_images` 同样没有）。也就是说目前没有任何可编程通道能把照片塞进金山表格。
+  - 现状可行做法：金山网页版「插入 → 图片 → 嵌入单元格」手动拖。压缩后单张 ≤500KB，比原先的 zip 拆包反而轻。
+  - 若要做成自动，需要金山开放平台的自建应用凭证（`client_id` / `client_secret`）＋一台常开中转；文档里那些接口能否被第三方调用尚未核实，动手前必须先验。
+  - 在那之前，`检查明细` 的「照片文件名」列仍可记录张数与文件名，作为「照片在科室群里、按站名+项号可查」的索引。
 
 ## 十二、落表链路（打分 → 检查明细 → 考核记录）
 
