@@ -38,9 +38,11 @@
  *        KDOCS_URL    https://www.kdocs.cn/api/v3/ide/file/{fileId}/script/{sid}/sync_task
  *        KDOCS_TOKEN  AirScript 脚本令牌
  *      可选 ALLOW_ORIGIN（默认 *）
- *   4. 创建触发器 → API 网关触发 → 选「集成响应」，保存
- *      会得到一个固定域名：
- *        https://service-xxxxxxxx-xxxxxxxx.sh.apigw.tencentcs.com/release/kaohe-relay
+ *   4. 左侧菜单「函数 URL」→ 新建函数 URL → 别名/版本选 $LATEST、
+ *      公网访问开启、授权类型「开放」、CORS 保持关闭 → 得到一个固定域名：
+ *        https://1258344699-xxxxxxxx.sh.tencentscf.com
+ *      ★ 不要建触发器：API 网关产品已于 2025-06-30 停止服务，
+ *        2024-07-01 起就不允许新建 API 网关触发了，弹窗里只剩「定时触发」。
  *   5. 把这个域名填进 docs/assets/config.js 的 report.url，token 留空
  *
  * 费用：前 3 个月有免费额度，之后自动转按量计费（不强制买套餐）。
