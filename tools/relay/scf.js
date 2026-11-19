@@ -21,7 +21,8 @@
  *
  * 部署（全程网页，不用命令行）
  *   1. 腾讯云控制台 → 云函数 SCF → 新建 → 模板「从头开始」
- *      运行环境 Node.js 16 或 18，函数名 kaohe-relay
+ *      运行环境选 Node.js 24.11（22.11 也行；18.15 / 20.19 已 EOL，别选），
+ *      函数名 kaohe-relay
  *   2. 把本文件整体粘进 index.js（在线编辑器里改）
  *   3. 函数配置 → 环境变量，加两条：
  *        KDOCS_URL    https://www.kdocs.cn/api/v3/ide/file/{fileId}/script/{sid}/sync_task
@@ -32,7 +33,8 @@
  *        https://service-xxxxxxxx-xxxxxxxx.gz.apigw.tencentcs.com/release/kaohe-relay
  *   5. 把这个域名填进 docs/assets/config.js 的 report.url，token 留空
  *
- * 免费额度：每月 100 万次调用 + 40 万 GBs，15 站×每月 1 次远远用不到 1%。
+ * 费用：前 3 个月有免费额度，之后自动转按量计费（不强制买套餐）。
+ *   实际 15 站/月 × 5MB ≈ 0.06 元/月，一年不到 1 元。
  */
 
 const https = require('https');
