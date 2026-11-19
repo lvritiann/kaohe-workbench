@@ -254,7 +254,7 @@
        但它顶掉了相册入口，所以另给一个不带的，照片已在手机里时仍能选。
        透明 input 铺满整块 label：点哪儿都等价于点 input 本身，
        不依赖 label[for] 转发（部分 X5 内核对转发支持不稳）。 */
-    h += '<div class="field"><label>佐证照片（可选，最多 ' + PHOTO_PER_ITEM + ' 张）</label>';
+    h += '<div class="field"><label>佐证照片（可选，1 张）</label>';
     h += '<div class="photo-pick">';
     h += '<label class="photo-cap">拍照<input type="file" accept="image/*" capture="environment" data-photo="' + key + '"></label>';
     h += '<label class="photo-cap">从相册选<input type="file" accept="image/*" multiple data-photo="' + key + '"></label>';
@@ -283,7 +283,7 @@
   var PHOTO_MAX_EDGE = 1600;                                        /* 长边上限 */
   var PHOTO_Q = [0.82, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5];            /* 质量档，从高到低试 */
   var PHOTO_SHRINK = 0.85, PHOTO_ROUNDS = 4;                        /* 质量见底后缩边重试 */
-  var PHOTO_PER_ITEM = 3;                                           /* 每项最多几张 */
+  var PHOTO_PER_ITEM = 1;                                           /* 每项 1 张：表里 N 列一格一张 */
   /* ★ 单张 500KB 约束不住总量：73 项 × 3 张 × 500KB ≈ 100MB，JSZip 在安卓上造这么大的
      blob 会 OOM 或长时间卡死，navigator.share 也会被系统直接拒。所以打包前先算总量。 */
   var PHOTO_TOTAL_MAX = 30 * 1024;                               /* 打包总量上限 30MB */
@@ -659,10 +659,13 @@
     });
     var photos = [];
     function collect(no, arr) {
-      (arr || []).forEach(function (p) {
-        var m = /^data:([^;]+)/.exec(p.data || '');
-        photos.push({ no: no, name: p.name || '', data: p.data, mime: m ? m[1] : 'image/jpeg' });
-      });
+      /* 每项只取第 1 张：表里 N 列一格只能放一张，多传的白占请求体。
+         老草稿可能还存着 3 张（v6-9 及以前允许），这里统一截断，
+         不去动本机已存的照片 —— 用户自己决定删不删。 */
+      var p = (arr || [])[0];
+      if (!p || !p.data) return;
+      var m = /^data:([^;]+)/.exec(p.data);
+      photos.push({ no: no, name: p.name || '', data: p.data, mime: m ? m[1] : 'image/jpeg' });
     }
     DATA.items.forEach(function (it) { collect(it.no, S_.photos[it.no]); });
     DATA.veto.forEach(function (v) { collect('v' + v.no, S_.photos['v' + v.no]); });
