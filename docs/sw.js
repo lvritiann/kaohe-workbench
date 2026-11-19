@@ -1,5 +1,5 @@
 /* 离线缓存：站点信号差时也能打开打分页 */
-var CACHE = 'kaohe-v6-11';
+var CACHE = 'kaohe-v6-12';
 var SHELL = [
   './',
   'index.html',

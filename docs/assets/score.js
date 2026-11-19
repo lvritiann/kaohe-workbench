@@ -779,11 +779,35 @@
     if ($('reCfg')) $('reCfg').addEventListener('click', function () { showReportSetup(); });
   }
 
+  /* ★ 手机端一律不造 zip（2026-11-19 定）。
+     安卓把 blob: 链接交给系统 Intent「按类型找应用」，而 .zip 在多数手机上没有默认
+     关联程序，于是弹「未安装可打开该链接的应用」—— 那条提示是手机系统弹的，网页
+     既压不住、也读不到结果，所以「已发起下载」这种面板说什么都是猜的。
+     更根本的是：直落表接通后照片走 InsertImage 直达金山，本来就不该让检查人下载
+     文件再手动转交。所以手机端只出 .xlsx（WPS 能直接打开），zip 只留给电脑端。 */
+  function isHandset() {
+    var u = navigator.userAgent || '';
+    if (/Android|iPhone|iPod|Mobile|HarmonyOS/i.test(u)) return true;
+    /* iPadOS 13+ 的 UA 自称 Macintosh，用触摸点数量区分 */
+    if (/Macintosh/.test(u) && (navigator.maxTouchPoints || 0) > 1) return true;
+    return false;
+  }
+
+  /* 文件名时间戳：本地时间到秒，用于避免同名覆盖 */
+  function stampNow() {
+    var ts = new Date();
+    return ts.getFullYear() + pad(ts.getMonth() + 1) + pad(ts.getDate()) +
+      pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
+  }
+
   /* 打包前的总量闸：超限既不静默失败，也不闷头去造一个可能把手机 OOM 掉的 blob。
      ★ 阈值与文案里的数字都取自 PHOTO_TOTAL_MAX，改一处即可，不要写死两个地方。 */
   function generate(res, veto) {
     /* 配了直落表就走在线提交，不再打包 —— 打包下载在微信内核里本来就点不开 */
     if (reportCfg().url) { submitOnline(res, veto); return; }
+
+    /* 没配直落表：手机上不给下载这条路，直接引导去配，或者只出一份 Excel */
+    if (isHandset()) { showNoTarget(res, veto); return; }
 
     var totalKB = photoTotalKB();
     if (totalKB <= PHOTO_TOTAL_MAX) { doPack(res, veto); return; }
@@ -800,10 +824,64 @@
     $('forcePack').addEventListener('click', function () { doPack(res, veto); });
   }
 
+  /* ★ 手机端没配直落表时的落点。
+     原来这种情况会直接打包成一个 zip 让人下载 —— 结果就是安卓弹「未安装可打开该
+     链接的应用」，用户以为提交失败，其实分数还好端端躺在本机草稿里。
+     现在改成把情况说明白，并且只给两条真能走通的路：
+       ① 去设置：填上提交地址，从此点提交直接写金山表（照片也跟着进，不用下载）
+       ② 只导 Excel：出一个 .xlsx，WPS 能直接打开看，先应急
+     照片不塞进 xlsx —— SheetJS 社区版不支持嵌图，硬塞会得到一个假成功。
+     这一点必须写进文案，否则用户会以为「导出了就代表照片也交了」。 */
+  function showNoTarget(res, veto) {
+    var totalKB = photoTotalKB();
+    var b = '<div class="sheet__grip"></div><h3>还没连上金山表</h3>';
+    b += '<div class="hint">这台手机没填「提交地址」，所以分数目前只能存在本机。' +
+      '配一次之后，点提交就直接写进「检查明细」，照片也一起进表，不用下载任何文件。</div>';
+
+    if (totalKB > 0) {
+      b += '<div class="warn" style="margin:10px 0 0">本机有约 <b>' +
+        (totalKB / 1024).toFixed(1) + 'MB</b> 佐证照片。' +
+        '<b>导出 Excel 不会带上照片</b>（Excel 文件本身装不了图）——' +
+        '照片只有走直落表才会进表。急着交的话，照片可以先单独用微信发给计划经营科。</div>';
+    }
+
+    b += '<div class="sheet__acts">' +
+      '<button class="btn btn--ghost" id="ntXlsx">只导 Excel</button>' +
+      '<button class="btn btn--primary" id="ntCfg">去设置</button></div>';
+    showSheet(b);
+    $('ntCfg').addEventListener('click', function () { showReportSetup(); });
+    $('ntXlsx').addEventListener('click', function () { exportXlsxOnly(res, veto); });
+  }
+
+  /* 只出 Excel：单文件、不套 zip。
+     ★ 为什么不用 zip 包一层：手机上 .xlsx 有 WPS 认领，点了就能打开；
+       .zip 没人认领，系统只会弹「未安装可打开该链接的应用」。 */
+  function exportXlsxOnly(res, veto) {
+    var ts = new Date();
+    var base = '检查表_' + S_.station + '_' + S_.month + '_' + stampNow();
+
+    showSheet('<div class="sheet__grip"></div><h3>正在生成</h3>' +
+      '<div class="hint">正在准备表格，请稍候…</div>');
+
+    loadVendor().then(function () {
+      try {
+        var wb = buildWorkbook(res, veto, ts);
+        /* type:'array' 直接给字节数组，省掉 base64 再解码的一来一回 */
+        var buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        var blob = new Blob([buf], { type: XLSX_MIME });
+        offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month, '.xlsx');
+      } catch (e) { packFail(e); }
+    }).catch(function (e) {
+      showSheet('<div class="sheet__grip"></div><h3>表格组件未就绪</h3>' +
+        '<div class="err">' + esc(e.message) + '</div>' +
+        '<div class="hint">请联网打开一次本页，让浏览器缓存组件后再试；打分内容已存本机草稿，不会丢失。</div>' +
+        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回填写</button></div>');
+    });
+  }
+
   function doPack(res, veto) {
     var ts = new Date();
-    var stamp = ts.getFullYear() + pad(ts.getMonth() + 1) + pad(ts.getDate()) + pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
-    var base = '检查表_' + S_.station + '_' + S_.month + '_' + stamp;
+    var base = '检查表_' + S_.station + '_' + S_.month + '_' + stampNow();
 
     showSheet('<div class="sheet__grip"></div><h3>正在打包</h3>' +
       '<div class="hint">正在准备离线导出组件，请稍候…</div>');
@@ -863,7 +941,7 @@
         zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
         zip.generateAsync({ type: 'blob' }).then(function (blob) {
-          offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month);
+          offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month, '.zip');
         }).catch(function (err) { packFail(err); });
       } catch (err) {
         packFail(err);
@@ -883,14 +961,26 @@
 
   /* ---------------- 导出下载 ----------------
      ★ 安卓上 a[download] 不是可靠下载：微信 / 企业微信 / QQ 的 X5 内核会把 blob: 链接当成
-       普通超链接交给系统 Intent 去「打开」，而系统里没有能打开 application/zip 的应用，
+       普通超链接交给系统 Intent 去「打开」，系统里没有认领该类型的应用，
        于是弹出「未安装可打开该链接的应用」。那条提示是**手机系统**弹的，不是本页弹的。
        同一段代码里又一个字都没校验下载结果，所以「实际失败却报成功」是必然。
        这里改成「系统分享 → 内置浏览器提示 → a[download] → 手动兜底」四级降级，
-       并且只把确定发生的事写进提示文案。 */
+       并且只把确定发生的事写进提示文案。
 
-  /* 下载用的 MIME 用通用二进制：zip 类型会让安卓「按类型找应用」，而手机下载器未必注册了它 */
-  var DL_MIME = 'application/octet-stream';
+     ★ 2026-11-19 追加：MIME 不能一律打成 octet-stream。
+       octet-stream 的含义就是「不知道是什么」，安卓拿到它只会去找「通用下载器」，
+       找不到就弹「未安装可打开该链接的应用」—— 这正是用户看到的。
+       改成按扩展名给真 MIME：.xlsx 用官方类型，系统才会把它派给 WPS 打开。
+       .zip 仍然只能是 octet-stream（没有更好的），但手机端已不再产出 zip。 */
+
+  var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  function mimeFor(filename, fallback) {
+    var n = String(filename || '').toLowerCase();
+    if (/\.xlsx$/.test(n)) return XLSX_MIME;
+    if (/\.zip$/.test(n)) return 'application/octet-stream';
+    return fallback || 'application/octet-stream';
+  }
 
   function inAppBrowser() {
     var u = navigator.userAgent || '';
@@ -898,13 +988,13 @@
     return /MicroMessenger/i.test(u) || /wxwork/i.test(u) || /QQ\//i.test(u);
   }
 
-  function octetBlob(blob) {
-    try { return new Blob([blob], { type: DL_MIME }); } catch (e) { return blob; }
+  function typedBlob(blob, filename) {
+    try { return new Blob([blob], { type: mimeFor(filename, blob.type) }); } catch (e) { return blob; }
   }
 
   function saveViaLink(blob, filename) {
     var url;
-    try { url = URL.createObjectURL(octetBlob(blob)); } catch (e) { return false; }
+    try { url = URL.createObjectURL(typedBlob(blob, filename)); } catch (e) { return false; }
     var a = document.createElement('a');
     a.href = url;
     a.download = filename;
@@ -943,7 +1033,7 @@
     }
 
     var file = null;
-    try { file = new File([blob], filename, { type: blob.type || 'application/zip' }); } catch (e) { file = null; }
+    try { file = new File([blob], filename, { type: mimeFor(filename, blob.type) }); } catch (e) { file = null; }
 
     if (file && navigator.canShare && navigator.share) {
       var can = false;
@@ -965,9 +1055,14 @@
     byLink();
   }
 
-  /* 结果面板：文件没到手之前，绝不说「已下载」 */
-  function offerExport(blob, base, title) {
-    var filename = base + '.zip';
+  /* 结果面板：文件没到手之前，绝不说「已下载」
+     ext 决定文件类型：'.zip'（电脑端，含照片）或 '.xlsx'（手机端，不含照片）。
+     ★ 是否清草稿跟 ext 挂钩：xlsx 里没有照片，一删草稿照片就永久没了，
+       所以只有含照片的 zip 成功发出去之后才允许清。 */
+  function offerExport(blob, base, title, ext) {
+    ext = ext || '.zip';
+    var filename = base + ext;
+    var hasPhotosInPack = (ext === '.zip');
     var draftKey = S_.station + '|' + S_.month;
 
     /* 文件名单独放一块、可选可长按：万一下载通道全都不通，这是唯一能让用户把
@@ -992,15 +1087,24 @@
          重试走的是同一个 blob，不会再打一次包。 */
       var h = '<div class="sheet__grip"></div>';
       if (r === 'shared') {
-        S.removeDraft(draftKey);
+        if (hasPhotosInPack) S.removeDraft(draftKey);
         h += '<h3>已调起分享</h3><div class="hint">选<b>微信</b>发给计划经营科即可，文件是：</div>' + nameBlock();
-        h += '<div class="hint">科室拿到后把照片导入金山在线表；GitHub 仓库不存照片。</div>';
+        if (hasPhotosInPack) {
+          h += '<div class="hint">科室拿到后把照片导入金山在线表；GitHub 仓库不存照片。</div>';
+        } else {
+          h += '<div class="hint">这份 Excel <b>不含照片</b>，所以本机草稿先留着 ——' +
+            '照片还在手机上，需要的话另行用微信发给科室。</div>';
+        }
       } else if (r === 'download') {
         /* ★ 这里不清草稿：下载是否真的落盘，浏览器不回话（就是这次要修的坑）。
            拿「发了下载请求」当成功去删草稿，一旦静默失败就是「文件没到手、数据也没了」。 */
-        h += '<h3>已发起下载</h3><div class="hint">请到手机的「下载」或「文件管理」里查看：</div>' + nameBlock();
-        h += '<div class="hint">找不到文件就点下面的「重新导出」。本次草稿先留着 —— ' +
-          '确认文件到手后，下次进同一油站同一月会提示「已恢复上次草稿」，重新提交即覆盖。</div>';
+        h += '<h3>文件已交给浏览器</h3>';
+        h += '<div class="hint">' + (ext === '.xlsx'
+          ? '通常会在通知栏提示下载完成，也可以到「下载」或「文件管理」里找。点开时如果问用哪个应用打开，选 <b>WPS</b>。'
+          : '请到「下载」或「文件管理」里查看。') + '</div>' + nameBlock();
+        h += '<div class="hint">如果又弹「未安装可打开该链接的应用」，说明这台浏览器存不了文件，' +
+          '换 Chrome 或手机自带浏览器重新导出即可。本次草稿先留着 —— ' +
+          '下次进同一油站同一月会提示「已恢复上次草稿」，重新提交即覆盖。</div>';
         toast('草稿先留着，不用现在清理');
       } else if (r === 'cancel') {
         h += '<h3>已取消分享</h3><div class="hint">文件没有发出，打分已存本机草稿，不会丢。可以直接再发一次：</div>' + nameBlock();
