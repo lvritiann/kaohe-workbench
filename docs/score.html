@@ -23,6 +23,22 @@
 .photo-cap{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:7px 16px;border:1px solid var(--line-strong,rgba(140,170,190,.45));border-radius:8px;color:var(--text-2);font-size:13px;cursor:pointer;min-height:36px;overflow:hidden;-webkit-tap-highlight-color:transparent}
 .photo-cap:active{background:rgba(255,255,255,.06)}
 .photo-cap input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;font-size:0;cursor:pointer}
+/* 「拍照」现在是 <button>（原生相机），要把浏览器默认的按钮样式清掉才和 label 长得一样 */
+button.photo-cap{background:transparent;font-family:inherit;line-height:normal}
+/* 原生相机取景。
+   ★ 为什么不用 <input capture>：三星浏览器、部分国产内核直接忽略 capture 属性，
+     落到系统相册，而相册里没有拍照入口 —— 现场等于拍不了照。
+     getUserMedia 不开 Intent，直接开摄像头，各家内核都认；代价是首次要授权一次。 */
+.cammask{position:fixed;inset:0;z-index:9999;background:#000;display:none}
+.cammask.on{display:block}
+.cammask video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.cam-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 14px 14px;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
+.cam-btn{padding:8px 15px;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(0,0,0,.35);color:#fff;font-size:13px;cursor:pointer;min-height:36px;font-family:inherit}
+.cam-btn:active{background:rgba(255,255,255,.2)}
+.cam-tip{position:absolute;left:0;right:0;bottom:calc(112px + env(safe-area-inset-bottom));text-align:center;color:rgba(255,255,255,.72);font-size:12px;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.cam-bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:0 0 calc(26px + env(safe-area-inset-bottom));background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.65))}
+.cam-shutter{width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.45);box-shadow:inset 0 0 0 3px rgba(0,0,0,.35);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cam-shutter:active{transform:scale(.94)}
 </style>
 </head>
 <body>

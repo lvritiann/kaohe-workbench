@@ -38,24 +38,20 @@
     setTimeout(function () { t.classList.remove('show'); }, 2400);
   }
 
-  /* ---------- 离线组件：只在真正要导出时加载 ----------
-     登录前同步加载 862KB SheetJS + 96KB JSZip 是登录慢的主因。 */
+  /* ---------- 离线组件：只在真正要导 Excel 时加载 ----------
+     SheetJS 862KB，登录前同步加载是登录慢的主因。
+     ★ JSZip 已不再需要：zip 打包那条路 2026-11-19 砍掉了，只剩单文件 .xlsx。 */
 
   function loadVendor() {
-    var need = [];
-    if (typeof XLSX === 'undefined') need.push('assets/vendor/xlsx.full.min.js');
-    if (typeof JSZip === 'undefined') need.push('assets/vendor/jszip.min.js');
-    if (!need.length) return Promise.resolve();
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
     if (vendorPromise) return vendorPromise;
-    vendorPromise = Promise.all(need.map(function (src) {
-      return new Promise(function (res, rej) {
-        var s = document.createElement('script');
-        s.src = src;
-        s.onload = function () { res(); };
-        s.onerror = function () { rej(new Error('离线组件加载失败：' + src)); };
-        document.head.appendChild(s);
-      });
-    })).catch(function (e) { vendorPromise = null; throw e; });
+    vendorPromise = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = 'assets/vendor/xlsx.full.min.js';
+      s.onload = function () { res(); };
+      s.onerror = function () { rej(new Error('离线组件加载失败：assets/vendor/xlsx.full.min.js')); };
+      document.head.appendChild(s);
+    }).catch(function (e) { vendorPromise = null; throw e; });
     return vendorPromise;
   }
 
@@ -256,9 +252,13 @@
        不依赖 label[for] 转发（部分 X5 内核对转发支持不稳）。 */
     h += '<div class="field"><label>佐证照片（可选，1 张）</label>';
     h += '<div class="photo-pick">';
-    h += '<label class="photo-cap">拍照<input type="file" accept="image/*" capture="environment" data-photo="' + key + '"></label>';
+    /* ★「拍照」是 <button> 不是 label+input：三星等内核会把 input 直接丢进系统相册，
+       相册里没有拍照入口。改成点按钮 → getUserMedia 自己开摄像头取景。
+       下面那个隐藏 input 只在相机不可用 / 授权被拒时兜底。 */
+    h += '<button type="button" class="photo-cap" data-cam="' + key + '">拍照</button>';
     h += '<label class="photo-cap">从相册选<input type="file" accept="image/*" multiple data-photo="' + key + '"></label>';
     h += '</div>';
+    h += '<input type="file" accept="image/*" capture="environment" data-photo="' + key + '" id="camfallback-' + key + '" style="display:none">';
     h += '<div class="photo-row" id="photos-' + key + '">';
     photos.forEach(function (p, i) {
       /* kb 是压缩后的真实体积（老草稿里的照片没有这个字段，就不显示）：
@@ -284,9 +284,9 @@
   var PHOTO_Q = [0.82, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5];            /* 质量档，从高到低试 */
   var PHOTO_SHRINK = 0.85, PHOTO_ROUNDS = 4;                        /* 质量见底后缩边重试 */
   var PHOTO_PER_ITEM = 1;                                           /* 每项 1 张：表里 N 列一格一张 */
-  /* ★ 单张 500KB 约束不住总量：73 项 × 3 张 × 500KB ≈ 100MB，JSZip 在安卓上造这么大的
-     blob 会 OOM 或长时间卡死，navigator.share 也会被系统直接拒。所以打包前先算总量。 */
-  var PHOTO_TOTAL_MAX = 30 * 1024;                               /* 打包总量上限 30MB */
+  /* ★ 单张 500KB 换成「总量」也约束不住：73 项 × 3 张 × 500KB ≈ 100MB。
+     不过现在不再打包，总量只用于「未配地址」时告知用户本机压了多少照片。 */
+  var PHOTO_TOTAL_MAX = 30 * 1024;                               /* 历史阈值，仅文案参考 */
 
   /* 正在压缩、还没 push 进 S_.photos 的照片数（照片 key → 数量）。
      ★ 名额必须在「用户选中那一刻」就占用：压缩是异步的，若等 push 完再算剩余名额，
@@ -318,6 +318,54 @@
     return { data: data, bytes: b64Bytes(b64), w: w, h: h };
   }
 
+  /* 把一张已解码的 Image 压到 500KB 以内。src 三种来源共用这一份：
+     相册选的文件（compress）、原生相机截的帧（compressDataUrl）。
+     ★ fail 由调用方给：它要负责把「在途名额」还回去。 */
+  function shrinkImage(img, cb, fail) {
+    var cv = document.createElement('canvas');
+    var ctx = cv.getContext('2d');
+    var iw = img.width, ih = img.height;
+    if (!ctx || !iw || !ih) { fail(); return; }
+
+    var k = PHOTO_MAX_EDGE / Math.max(iw, ih);
+    var w = k < 1 ? Math.round(iw * k) : iw;
+    var h = k < 1 ? Math.round(ih * k) : ih;
+
+    var best = null, round = 0, qi, r;
+    while (round <= PHOTO_ROUNDS) {
+      /* 同一尺寸下先把质量档逐格降到 0.5；还超说明瓶颈在像素量，再缩边重来 */
+      for (qi = 0; qi < PHOTO_Q.length; qi++) {
+        r = encodeJpeg(img, cv, ctx, w, h, PHOTO_Q[qi]);
+        if (!r) { fail(); return; }
+        best = r;
+        if (r.bytes <= PHOTO_MAX_BYTE) break;
+      }
+      if (best.bytes <= PHOTO_MAX_BYTE) break;
+      w = Math.max(1, Math.round(w * PHOTO_SHRINK));
+      h = Math.max(1, Math.round(h * PHOTO_SHRINK));
+      round++;
+    }
+
+    if (best.bytes > PHOTO_MAX_BYTE) {
+      /* 兜底：超大原图 / canvas 有尺寸上限时可能真的压不进去。
+         用最省的一档再出一张，并取两次里更小的那个 —— 绝不越压越大。
+         同时明确告知，别让用户以为压缩失败了。 */
+      var s = Math.min(1, 1200 / Math.max(w, h));
+      var alt = encodeJpeg(img, cv, ctx, Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), 0.5);
+      if (alt && alt.bytes < best.bytes) best = alt;
+      toast('图片已压缩到最大程度');
+    }
+
+    cb({ data: best.data, w: best.w, h: best.h, kb: Math.round(best.bytes / 1024) });
+  }
+
+  function decodeInto(src, cb, fail) {
+    var img = new Image();
+    img.onload = function () { shrinkImage(img, cb, fail); };
+    img.onerror = fail;
+    img.src = src;
+  }
+
   function compress(file, cb) {
     var fr = new FileReader();
 
@@ -325,50 +373,152 @@
        漏了这一步，一张坏图会永久吃掉该照片 key 的一个位置。 */
     function fail() { toast('图片读取失败，请换一张'); cb(null); }
 
-    fr.onload = function (e) {
-      var img = new Image();
-      img.onload = function () {
-        var cv = document.createElement('canvas');
-        var ctx = cv.getContext('2d');
-        var iw = img.width, ih = img.height;
-        if (!ctx || !iw || !ih) { fail(); return; }
-
-        var k = PHOTO_MAX_EDGE / Math.max(iw, ih);
-        var w = k < 1 ? Math.round(iw * k) : iw;
-        var h = k < 1 ? Math.round(ih * k) : ih;
-
-        var best = null, round = 0, qi, r;
-        while (round <= PHOTO_ROUNDS) {
-          /* 同一尺寸下先把质量档逐格降到 0.5；还超说明瓶颈在像素量，再缩边重来 */
-          for (qi = 0; qi < PHOTO_Q.length; qi++) {
-            r = encodeJpeg(img, cv, ctx, w, h, PHOTO_Q[qi]);
-            if (!r) { fail(); return; }
-            best = r;
-            if (r.bytes <= PHOTO_MAX_BYTE) break;
-          }
-          if (best.bytes <= PHOTO_MAX_BYTE) break;
-          w = Math.max(1, Math.round(w * PHOTO_SHRINK));
-          h = Math.max(1, Math.round(h * PHOTO_SHRINK));
-          round++;
-        }
-
-        if (best.bytes > PHOTO_MAX_BYTE) {
-          /* 兜底：超大原图 / canvas 有尺寸上限时可能真的压不进去。
-             用最省的一档再出一张，并取两次里更小的那个 —— 绝不越压越大。
-             同时明确告知，别让用户以为压缩失败了。 */
-          var s = Math.min(1, 1200 / Math.max(w, h));
-          var alt = encodeJpeg(img, cv, ctx, Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)), 0.5);
-          if (alt && alt.bytes < best.bytes) best = alt;
-          toast('图片已压缩到最大程度');
-        }
-
-        cb({ data: best.data, w: best.w, h: best.h, kb: Math.round(best.bytes / 1024) });
-      };
-      img.onerror = fail;
-      img.src = e.target.result;
-    };
+    fr.onload = function (e) { decodeInto(e.target.result, cb, fail); };
     fr.onerror = fail;
     fr.readAsDataURL(file);
+  }
+
+  /* 原生相机截出来的 dataURL 走这条：不经过 File / FileReader，省一次编码往返 */
+  function compressDataUrl(dataUrl, cb) {
+    decodeInto(dataUrl, cb, function () { toast('照片处理失败，请重拍'); cb(null); });
+  }
+
+  /* ---------------- 原生相机 ----------------
+     ★ 为什么不再用 <input type="file" capture="environment">：
+       三星浏览器（以及部分国产内核）会忽略 capture 属性，直接把点击交给系统相册，
+       而相册界面里没有拍照入口 —— 现场等于拍不了照。这条路在三星上无解，
+       因为 capture 只是个「建议」，浏览器可以不听。
+     getUserMedia 不经过系统 Intent 分发，直接拿摄像头画面自己画，
+     各家 Chromium 内核都支持；代价是首次要授权一次，被拒就退回相册选图。
+
+     ★ 视频流必须显式停：不停的话摄像头指示灯常亮、耗电，下次 open 还可能黑屏。 */
+
+  var camStream = null;
+  var camKey = null;
+  var camFacing = 'environment';   /* environment=后置，user=前置 */
+
+  function camSupported() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
+  /* 面板 DOM 现建现用：不在 score.html 里写死，避免所有页面都背一段用不到的标签 */
+  function camEl() {
+    var m = document.getElementById('camMask');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'camMask';
+    m.className = 'cammask';
+    m.innerHTML =
+      '<video id="camVideo" playsinline autoplay muted></video>' +
+      '<div class="cam-top">' +
+      '<button type="button" class="cam-btn" id="camClose">关闭</button>' +
+      '<button type="button" class="cam-btn" id="camFlip">翻转</button>' +
+      '</div>' +
+      '<div class="cam-tip">对准后点下方白色按钮拍照</div>' +
+      '<div class="cam-bar">' +
+      '<button type="button" class="cam-shutter" id="camShot" aria-label="拍照"></button>' +
+      '</div>';
+    document.body.appendChild(m);
+    document.getElementById('camClose').addEventListener('click', closeCamera);
+    document.getElementById('camFlip').addEventListener('click', function () {
+      camFacing = camFacing === 'environment' ? 'user' : 'environment';
+      startCamera().catch(function () {
+        camFacing = camFacing === 'environment' ? 'user' : 'environment';
+        toast('这台设备没有另一个摄像头');
+      });
+    });
+    document.getElementById('camShot').addEventListener('click', shoot);
+    return m;
+  }
+
+  function stopStream() {
+    if (camStream) {
+      try { camStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
+      camStream = null;
+    }
+    var v = document.getElementById('camVideo');
+    if (v) {
+      try { v.pause(); } catch (e) { }
+      try { v.srcObject = null; } catch (e) { }
+    }
+  }
+
+  function startCamera() {
+    stopStream();
+    var video = document.getElementById('camVideo');
+    if (!video) return Promise.reject(new Error('no video'));
+    /* ideal 而不是 exact：低端机给不出 1920 时不要直接失败 */
+    var opt = {
+      audio: false,
+      video: { facingMode: camFacing, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    };
+    return navigator.mediaDevices.getUserMedia(opt).then(function (s) {
+      camStream = s;
+      video.srcObject = s;
+      var p = video.play();
+      if (p && p.catch) p.catch(function () { });   /* 自动播放被拦不影响手动出图 */
+      return true;
+    });
+  }
+
+  function closeCamera() {
+    stopStream();
+    var m = document.getElementById('camMask');
+    if (m) m.classList.remove('on');
+    camKey = null;
+  }
+
+  function openCamera(k) {
+    if (!S_.photos[k]) S_.photos[k] = [];
+    /* 名额要先卡：面板开着的时候用户没法删已有照片，进去拍完才发现超限最气人 */
+    if (S_.photos[k].length + (photoPending[k] || 0) >= PHOTO_PER_ITEM) {
+      toast('每项最多 ' + PHOTO_PER_ITEM + ' 张，请先删掉不要的');
+      return;
+    }
+    camKey = k;
+    camEl().classList.add('on');
+    startCamera().catch(function (err) {
+      closeCamera();
+      var denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+      toast(denied ? '相机权限被拒绝，改从相册选' : '这台浏览器打不开相机，改从相册选');
+      var fb = document.getElementById('camfallback-' + k);
+      if (fb) fb.click();
+    });
+  }
+
+  function shoot() {
+    var v = document.getElementById('camVideo');
+    var k = camKey;
+    if (!v || !k) return;
+    var w = v.videoWidth, h = v.videoHeight;
+    if (!w || !h) { toast('相机还没准备好，请稍等一下再拍'); return; }
+
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    if (!ctx) { toast('截图失败，请重拍'); return; }
+    /* 前置摄像头画面是镜像的，出图要翻回来，否则文字左右颠倒 */
+    if (camFacing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(v, 0, 0, w, h);
+
+    var dataUrl;
+    try { dataUrl = cv.toDataURL('image/jpeg', 0.92); } catch (e) { dataUrl = ''; }
+    /* 同 encodeJpeg 的坑：内存不足时 toDataURL 可能返回 'data:,' 而不抛错 */
+    if (!dataUrl || dataUrl.indexOf('data:image/jpeg') !== 0) {
+      toast('截图失败，请重拍'); return;
+    }
+
+    closeCamera();   /* 先关再压：压缩可能要一两秒，不该让人一直盯着取景框 */
+
+    photoPending[k] = (photoPending[k] || 0) + 1;
+    compressDataUrl(dataUrl, function (r) {
+      photoPending[k] = (photoPending[k] || 1) - 1;
+      if (!photoPending[k]) delete photoPending[k];
+      if (!r) return;
+      if (!S_.photos[k]) S_.photos[k] = [];
+      S_.photos[k].push({ name: '现场拍照.jpg', data: r.data, w: r.w, h: r.h, kb: r.kb });
+      refresh(); scheduleSave();
+    });
   }
 
   /* 只统计「当前仍是扣分 / 否决」项的照片总量（KB）。
@@ -443,6 +593,8 @@
         S_.photos[q[0]].splice(Number(q[1]), 1);
         refresh(); scheduleSave(); return;
       }
+      var dc = t.getAttribute && t.getAttribute('data-cam');
+      if (dc) { openCamera(dc); return; }
     });
 
     $('app').addEventListener('input', function (e) {
@@ -779,19 +931,8 @@
     if ($('reCfg')) $('reCfg').addEventListener('click', function () { showReportSetup(); });
   }
 
-  /* ★ 手机端一律不造 zip（2026-11-19 定）。
-     安卓把 blob: 链接交给系统 Intent「按类型找应用」，而 .zip 在多数手机上没有默认
-     关联程序，于是弹「未安装可打开该链接的应用」—— 那条提示是手机系统弹的，网页
-     既压不住、也读不到结果，所以「已发起下载」这种面板说什么都是猜的。
-     更根本的是：直落表接通后照片走 InsertImage 直达金山，本来就不该让检查人下载
-     文件再手动转交。所以手机端只出 .xlsx（WPS 能直接打开），zip 只留给电脑端。 */
-  function isHandset() {
-    var u = navigator.userAgent || '';
-    if (/Android|iPhone|iPod|Mobile|HarmonyOS/i.test(u)) return true;
-    /* iPadOS 13+ 的 UA 自称 Macintosh，用触摸点数量区分 */
-    if (/Macintosh/.test(u) && (navigator.maxTouchPoints || 0) > 1) return true;
-    return false;
-  }
+  /* ★ 不再需要 isHandset()：zip 这条路已经整条砍掉，桌面端也不出 zip 了，
+     提交只剩「直落金山表」一条。为什么砍见下面 generate() 的注释。 */
 
   /* 文件名时间戳：本地时间到秒，用于避免同名覆盖 */
   function stampNow() {
@@ -800,28 +941,16 @@
       pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds());
   }
 
-  /* 打包前的总量闸：超限既不静默失败，也不闷头去造一个可能把手机 OOM 掉的 blob。
-     ★ 阈值与文案里的数字都取自 PHOTO_TOTAL_MAX，改一处即可，不要写死两个地方。 */
+  /* ★ 提交只有一条路：直落金山表（2026-11-19 定）。
+     同一天把「打包 zip → 科室导入」整条砍掉了，理由三条：
+       ① 照片本来就能走 Range.InsertImage 直接落进「检查明细」的 N 列，
+          让人先下载再导入纯属多余；
+       ② 安卓上 zip 根本落不了地 —— 系统会弹「未安装可打开该链接的应用」；
+       ③ 双轨并行时，检查人分不清哪条是正路，反而更容易漏交。
+     现在没配地址时只提示去配，另给一份不含照片的 Excel 应急（见 showNoTarget）。 */
   function generate(res, veto) {
-    /* 配了直落表就走在线提交，不再打包 —— 打包下载在微信内核里本来就点不开 */
     if (reportCfg().url) { submitOnline(res, veto); return; }
-
-    /* 没配直落表：手机上不给下载这条路，直接引导去配，或者只出一份 Excel */
-    if (isHandset()) { showNoTarget(res, veto); return; }
-
-    var totalKB = photoTotalKB();
-    if (totalKB <= PHOTO_TOTAL_MAX) { doPack(res, veto); return; }
-
-    var maxMb = Math.round(PHOTO_TOTAL_MAX / 1024);
-    var b = '<div class="sheet__grip"></div><h3>照片总量超限</h3>';
-    b += '<div class="warn" style="margin:0 0 12px">本次照片合计约 <b>' + (totalKB / 1024).toFixed(1) + 'MB</b>，' +
-      '超过 ' + maxMb + 'MB 上限。这么大一个包，手机上打包容易卡死或被系统拒绝。</div>';
-    b += '<div class="hint">建议分两次导出：先只录一部分扣分项（图也少），导出后再补录其余的。' +
-      '也可以删掉几张不影响判定的照片，<b>删掉的需重新拍</b>。</div>';
-    b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">返回修改</button>' +
-      '<button class="btn btn--primary" id="forcePack">仍然导出</button></div>';
-    showSheet(b);
-    $('forcePack').addEventListener('click', function () { doPack(res, veto); });
+    showNoTarget(res, veto);
   }
 
   /* ★ 手机端没配直落表时的落点。
@@ -835,27 +964,27 @@
   function showNoTarget(res, veto) {
     var totalKB = photoTotalKB();
     var b = '<div class="sheet__grip"></div><h3>还没连上金山表</h3>';
-    b += '<div class="hint">这台手机没填「提交地址」，所以分数目前只能存在本机。' +
-      '配一次之后，点提交就直接写进「检查明细」，照片也一起进表，不用下载任何文件。</div>';
+    b += '<div class="hint">本机没填「提交地址」，分数只能先存在这台设备上。' +
+      '配一次之后，点提交就直接写进金山「检查明细」，<b>照片会作为真图片嵌进对应单元格</b>，' +
+      '不用下载、不用导入、也不用发微信。</div>';
 
     if (totalKB > 0) {
-      b += '<div class="warn" style="margin:10px 0 0">本机有约 <b>' +
+      b += '<div class="warn" style="margin:10px 0 0">本机已拍 <b>' +
         (totalKB / 1024).toFixed(1) + 'MB</b> 佐证照片。' +
-        '<b>导出 Excel 不会带上照片</b>（Excel 文件本身装不了图）——' +
-        '照片只有走直落表才会进表。急着交的话，照片可以先单独用微信发给计划经营科。</div>';
+        '<b>导出的 Excel 不会带上照片</b>（Excel 文件本身装不了图）——' +
+        '照片只有走直落表才会进表。所以除非网断了要留个底，否则建议直接配地址提交。</div>';
     }
 
     b += '<div class="sheet__acts">' +
-      '<button class="btn btn--ghost" id="ntXlsx">只导 Excel</button>' +
+      '<button class="btn btn--ghost" id="ntXlsx">先存一份 Excel</button>' +
       '<button class="btn btn--primary" id="ntCfg">去设置</button></div>';
     showSheet(b);
     $('ntCfg').addEventListener('click', function () { showReportSetup(); });
     $('ntXlsx').addEventListener('click', function () { exportXlsxOnly(res, veto); });
   }
 
-  /* 只出 Excel：单文件、不套 zip。
-     ★ 为什么不用 zip 包一层：手机上 .xlsx 有 WPS 认领，点了就能打开；
-       .zip 没人认领，系统只会弹「未安装可打开该链接的应用」。 */
+  /* 应急出口：单文件 .xlsx，不含照片。
+     它不是「导入用的中间文件」，只是分数万一交不上时给人看一眼的存档。 */
   function exportXlsxOnly(res, veto) {
     var ts = new Date();
     var base = '检查表_' + S_.station + '_' + S_.month + '_' + stampNow();
@@ -869,87 +998,12 @@
         /* type:'array' 直接给字节数组，省掉 base64 再解码的一来一回 */
         var buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         var blob = new Blob([buf], { type: XLSX_MIME });
-        offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month, '.xlsx');
+        offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month);
       } catch (e) { packFail(e); }
     }).catch(function (e) {
       showSheet('<div class="sheet__grip"></div><h3>表格组件未就绪</h3>' +
         '<div class="err">' + esc(e.message) + '</div>' +
         '<div class="hint">请联网打开一次本页，让浏览器缓存组件后再试；打分内容已存本机草稿，不会丢失。</div>' +
-        '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回填写</button></div>');
-    });
-  }
-
-  function doPack(res, veto) {
-    var ts = new Date();
-    var base = '检查表_' + S_.station + '_' + S_.month + '_' + stampNow();
-
-    showSheet('<div class="sheet__grip"></div><h3>正在打包</h3>' +
-      '<div class="hint">正在准备离线导出组件，请稍候…</div>');
-
-    loadVendor().then(function () {
-      try {
-        var wb = buildWorkbook(res, veto, ts);
-        var xlsxB64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-        var zip = new JSZip();
-        zip.file(base + '.xlsx', xlsxB64, { base64: true });
-
-        /* 扣分/NA 清单：落表的权威依据。
-           ★ 不能只靠 photos —— 照片是可选的，而扣分项必须逐项进「检查明细」，
-             否则 record_sync.py 找不到该项就按「符合」给满分，等于白扣。 */
-        var deductions = [];
-        DATA.items.forEach(function (it) {
-          var a = S_.items[it.no];
-          if (a !== 'no' && a !== 'na') return;
-          deductions.push({
-            itemNo: it.no, item: it.name, cat: it.cat, std: it.score,
-            result: a === 'na' ? 'NA' : '扣分',
-            score: a === 'na' ? null : 0,
-            reason: (S_.notes[it.no] || {}).reason || ''
-          });
-        });
-        DATA.veto.forEach(function (v) {
-          if (S_.veto[v.no] !== 'no') return;
-          deductions.push({
-            itemNo: 'v' + v.no, item: v.name, cat: '一票否决', std: null,
-            result: '否决', score: null,
-            reason: (S_.notes['v' + v.no] || {}).reason || ''
-          });
-        });
-
-        var manifest = {
-          version: 'V6', station: S_.station, month: S_.month, inspector: USER.name,
-          submittedAt: fmt(ts), converted: res.converted, inspectScore: res.score,
-          veto: veto.failed, deductions: deductions, photos: []
-        };
-        DATA.items.forEach(function (it) {
-          if (S_.items[it.no] !== 'no') return;
-          var key = it.no;
-          (S_.photos[key] || []).forEach(function (p, i) {
-            var nm = 'photos/' + S_.station + '_项' + it.no + '_' + (i + 1) + '.jpg';
-            zip.file(nm, p.data.split(',')[1], { base64: true });
-            manifest.photos.push({ itemNo: it.no, item: it.name, file: nm, reason: (S_.notes[key] || {}).reason || '' });
-          });
-        });
-        DATA.veto.forEach(function (v) {
-          if (S_.veto[v.no] !== 'no') return;
-          (S_.photos['v' + v.no] || []).forEach(function (p, i) {
-            var nm = 'photos/否决' + v.no + '_' + (i + 1) + '.jpg';
-            zip.file(nm, p.data.split(',')[1], { base64: true });
-            manifest.photos.push({ itemNo: 'v' + v.no, item: v.name, file: nm, reason: (S_.notes['v' + v.no] || {}).reason || '' });
-          });
-        });
-        zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-
-        zip.generateAsync({ type: 'blob' }).then(function (blob) {
-          offerExport(blob, base, '检查表 ' + S_.station + ' ' + S_.month, '.zip');
-        }).catch(function (err) { packFail(err); });
-      } catch (err) {
-        packFail(err);
-      }
-    }).catch(function (e) {
-      showSheet('<div class="sheet__grip"></div><h3>离线组件未就绪</h3>' +
-        '<div class="err">' + esc(e.message) + '</div>' +
-        '<div class="hint">请联网打开一次本页，让浏览器缓存导出组件后再提交；打分内容已存本机草稿，不会丢失。</div>' +
         '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回填写</button></div>');
     });
   }
@@ -1055,14 +1109,11 @@
     byLink();
   }
 
-  /* 结果面板：文件没到手之前，绝不说「已下载」
-     ext 决定文件类型：'.zip'（电脑端，含照片）或 '.xlsx'（手机端，不含照片）。
-     ★ 是否清草稿跟 ext 挂钩：xlsx 里没有照片，一删草稿照片就永久没了，
-       所以只有含照片的 zip 成功发出去之后才允许清。 */
-  function offerExport(blob, base, title, ext) {
-    ext = ext || '.zip';
-    var filename = base + ext;
-    var hasPhotosInPack = (ext === '.zip');
+  /* 结果面板：文件没到手之前，绝不说「已下载」。
+     现在只出一种文件：单文件 .xlsx（不含照片）。zip 那条路已砍。
+     ★ 草稿一律不清：xlsx 里没有照片，一删草稿照片就永久没了。 */
+  function offerExport(blob, base, title) {
+    var filename = base + '.xlsx';
     var draftKey = S_.station + '|' + S_.month;
 
     /* 文件名单独放一块、可选可长按：万一下载通道全都不通，这是唯一能让用户把
@@ -1074,9 +1125,9 @@
     }
 
     function again() {
-      /* ★ 直接复用闭包里的 blob —— 那是同一次打包的产物，重发不必再打一遍包。
+      /* ★ 直接复用闭包里的 blob —— 那是同一次生成的产物，重发不必再生成一遍。
          这也正是把 blob 放在闭包而不是模块作用域的理由：面板一销毁，引用自然消失，
-         几十 MB 的产物不会常驻内存。 */
+         产物不会常驻内存。 */
       showSheet('<div class="sheet__grip"></div><h3>正在导出</h3>' +
         '<div class="hint">正在唤起系统分享 / 下载，请稍候…</div>');
       downloadBlob(blob, filename, title, show);
@@ -1084,27 +1135,20 @@
 
     function show(r) {
       /* ★ 用户自己关掉分享面板不是失败：照旧保草稿，但给一个就地重试的入口，
-         重试走的是同一个 blob，不会再打一次包。 */
+         重试走的是同一个 blob，不会再生成一遍。 */
       var h = '<div class="sheet__grip"></div>';
       if (r === 'shared') {
-        if (hasPhotosInPack) S.removeDraft(draftKey);
         h += '<h3>已调起分享</h3><div class="hint">选<b>微信</b>发给计划经营科即可，文件是：</div>' + nameBlock();
-        if (hasPhotosInPack) {
-          h += '<div class="hint">科室拿到后把照片导入金山在线表；GitHub 仓库不存照片。</div>';
-        } else {
-          h += '<div class="hint">这份 Excel <b>不含照片</b>，所以本机草稿先留着 ——' +
-            '照片还在手机上，需要的话另行用微信发给科室。</div>';
-        }
+        h += '<div class="hint">这份 Excel <b>不含照片</b>，所以本机草稿先留着 ——' +
+          '照片还在手机上，需要的话另行用微信发给科室。</div>';
       } else if (r === 'download') {
         /* ★ 这里不清草稿：下载是否真的落盘，浏览器不回话（就是这次要修的坑）。
            拿「发了下载请求」当成功去删草稿，一旦静默失败就是「文件没到手、数据也没了」。 */
         h += '<h3>文件已交给浏览器</h3>';
-        h += '<div class="hint">' + (ext === '.xlsx'
-          ? '通常会在通知栏提示下载完成，也可以到「下载」或「文件管理」里找。点开时如果问用哪个应用打开，选 <b>WPS</b>。'
-          : '请到「下载」或「文件管理」里查看。') + '</div>' + nameBlock();
+        h += '<div class="hint">通常会在通知栏提示下载完成，也可以到「下载」或「文件管理」里找。' +
+          '点开时如果问用哪个应用打开，选 <b>WPS</b>。</div>' + nameBlock();
         h += '<div class="hint">如果又弹「未安装可打开该链接的应用」，说明这台浏览器存不了文件，' +
-          '换 Chrome 或手机自带浏览器重新导出即可。本次草稿先留着 —— ' +
-          '下次进同一油站同一月会提示「已恢复上次草稿」，重新提交即覆盖。</div>';
+          '换 Chrome 或手机自带浏览器重新导出即可。本次草稿先留着。</div>';
         toast('草稿先留着，不用现在清理');
       } else if (r === 'cancel') {
         h += '<h3>已取消分享</h3><div class="hint">文件没有发出，打分已存本机草稿，不会丢。可以直接再发一次：</div>' + nameBlock();
