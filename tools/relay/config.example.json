@@ -1,0 +1,14 @@
+{
+  "_说明": "复制本文件为 config.json 再填。config.json 含明文令牌，已被 .gitignore 排除，永远不会进仓库。",
+
+  "port": 8788,
+  "host": "127.0.0.1",
+
+  "kdocsUrl": "https://www.kdocs.cn/api/v3/ide/file/85jEfN5x3rM95XxYSTpi1xHALnB45UGde/script/V2-17pmGRi9vJcYHgSkcQZsnX/sync_task",
+  "kdocsToken": "在这里填 AirScript 脚本令牌",
+
+  "allowOrigin": "*",
+  "maxBodyMb": 12,
+  "timeoutSec": 120,
+  "ratePerMin": 30
+}

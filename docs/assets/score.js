@@ -851,12 +851,18 @@
 
     var body = JSON.stringify({ Context: { argv: { payload: payload } } });
 
-    /* 请求体过大金山会拒收，也会让手机在弱网下反复超时。9MB 是留了余量的经验上限。 */
+    /* ★ 上限 5MB，不是随便定的：
+       走腾讯云函数中转时，SCF 同步调用的「请求事件」硬上限是 6MB
+       （官方文档 Sync request event size 6 MB），超了直接返回 RequestTooLarge。
+       照片在 JSON 里是 base64，体积膨胀 1/3，所以 5MB 的 body 对应约 3.7MB 原始照片，
+       大约 7 张 500KB 的图 —— 再多就得删图或分两次提交。
+       直连金山时这条闸也一样生效，反正金山自己也不喜欢大包。 */
     var mb = body.length / 1048576;
-    if (mb > 9) {
+    if (mb > 5) {
       showSheet('<div class="sheet__grip"></div><h3>照片太多</h3>' +
-        '<div class="warn" style="margin:0 0 12px">本次合计约 <b>' + mb.toFixed(1) + 'MB</b>，超过单次提交 9MB 上限。</div>' +
-        '<div class="hint">删掉几张不关键的佐证照片再提交；或者分两次检查、分两次提交（同站同月以最新一次为准）。</div>' +
+        '<div class="warn" style="margin:0 0 12px">本次合计约 <b>' + mb.toFixed(1) + 'MB</b>，超过单次提交 5MB 上限。</div>' +
+        '<div class="hint">删掉几张不关键的佐证照片再提交；或者分两次检查、分两次提交' +
+        '（同站同月以最新一次为准，第二次会覆盖第一次）。</div>' +
         '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">返回修改</button></div>');
       return;
     }

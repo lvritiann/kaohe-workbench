@@ -11,6 +11,14 @@ tools/*
 !tools/_t_*.js
 # QA 临时验收脚本（可随时重跑重生成，不入库）
 tools/_qa_*
+# Cloudflare Worker 中转源码：不含任何密钥（密钥在 Worker 环境变量里），需要入库留档
+!tools/worker/
+# 本机中转（纯 Node）：源码不含密钥，入库留档；config.json 与日志必须排除
+!tools/relay/
+!tools/relay/**
+tools/relay/config.json
+tools/relay/relay.log
+tools/relay/node_modules/
 # tools/airscript/ 内含明文令牌，整个目录保持排除，禁止入库
 inbox/
 .workbuddy/
