@@ -20,6 +20,9 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var esc = UI.esc;
+  /* 提交时最多等多久（毫秒）。必须大于中转函数的执行超时（现设 120 秒），
+     否则会出现「服务端刚要回包、页面先掐断」，把成功判成超时。 */
+  var CLIENT_WAIT_MS = 150000;
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   /* 会计月：上月 26 日 — 本月 25 日，26 日及以后已属下一个会计月。
      ★ 月度节奏是 25–31 日现场检查；若按日历月取值，26 日之后打的检查会被记到上一个月，
@@ -867,8 +870,11 @@
       return;
     }
 
+    /* ★ 2026-11-20 抬到 150 秒：中转变成了「异步提交 + 轮询」，函数超时设的是
+       120 秒。客户端若还停在 120 秒，就会出现「服务端刚要回包、页面先掐断」，
+       白白把一次成功判成超时。150 秒 = 120 秒函数 + 30 秒网络余量。 */
     var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 120000) : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, CLIENT_WAIT_MS) : null;
 
     /* 直连金山：地址里带 /api/v3/ide/，必须带脚本令牌。
        走中转（Worker / 自建服务）：令牌与 GitHub 令牌都在中转端，手机端一律不带。
@@ -913,7 +919,7 @@
     }).catch(function (e) {
       if (timer) clearTimeout(timer);
       /* 浏览器把它们拦在门外时请求其实可能已经到了金山 —— 不能断言"没提交" */
-      var why = (e && e.name === 'AbortError') ? '等待超时（2 分钟）' : ((e && e.message) || String(e));
+      var why = (e && e.name === 'AbortError') ? '等待超时（' + (CLIENT_WAIT_MS / 60000) + ' 分钟）' : ((e && e.message) || String(e));
       submitFail('连不上：' + why +
         '\n\n可能是浏览器跨域拦截。请把这个地址用系统浏览器（不是微信里）再打开一次重试；' +
         '若金山表格里已经出现本站本月记录，说明其实已经落表，不要重复提交。');
