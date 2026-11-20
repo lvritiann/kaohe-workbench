@@ -900,6 +900,15 @@
         }
       }
       if (inner && inner.ok) { submitOk(inner); return; }
+      /* ★ 2026-11-20：中转等不到脚本结果时回 pending，不是失败。
+         script 已经跑起来了，表里很可能已经有数据，报「没能落表」会误导人去重复提交。 */
+      if (inner && inner.pending) { submitPending(inner.error || '金山返回：处理中'); return; }
+      /* 金山的 sync_task 老毛病：脚本执行完毕、数据已落表，但同步接口回了 500
+         {"errno":10000,...,"result":"Unavailable"}。这是「耗时过长」不是「失败」。 */
+      if ((inner && inner.errno === 10000) || /"Unavailable"/.test(txt)) {
+        submitPending('金山同步接口回报：' + txt.substring(0, 200));
+        return;
+      }
       submitFail((inner && (inner.error || (inner.log || []).join(' | '))) || txt.substring(0, 300));
     }).catch(function (e) {
       if (timer) clearTimeout(timer);
@@ -924,6 +933,21 @@
         inner.log.map(esc).join('<br>') + '</div>';
     }
     b += '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">完成</button></div>';
+    showSheet(b);
+  }
+
+  /* ★ 结果未确认：数据可能已经落表，只是没等到回执。
+     这一屏刻意不用红色「失败」样式 —— 现场用户看到红字第一反应就是再交一次。
+     也不清草稿：万一真没落表，回来点一下就能重交。 */
+  function submitPending(msg) {
+    var b = '<div class="sheet__grip"></div><h3>已提交 · 结果未确认</h3>';
+    b += '<div class="warn" style="margin:0 0 12px">金山那边返回得比预期慢，页面没等到回执。' +
+      '<b>数据大概率已经写进表了，先别重复提交。</b></div>';
+    b += '<div class="err" style="white-space:pre-wrap;max-height:120px;overflow:auto">' + esc(msg) + '</div>';
+    b += '<div class="hint" style="margin-top:10px">怎么确认：打开「检查明细」，看本站本月有没有这次的记录。' +
+      '<br>· <b>有</b> → 直接关掉，不用再交' +
+      '<br>· <b>没有</b> → 回来再点一次提交（同站同月以最新一次为准，重复交不会多出一行）</div>';
+    b += '<div class="sheet__acts"><button class="btn btn--primary" onclick="closeSheet()">知道了</button></div>';
     showSheet(b);
   }
 
