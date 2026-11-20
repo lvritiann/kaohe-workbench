@@ -153,13 +153,20 @@ window.CFG = {
   /* 登录仅为署名动作，前端校验可被绕过；不做服务端鉴权。 */
   authNote: '前端登录仅用于记录打分人，不是安全边界。',
 
-  /* 打分直落表 · 提交地址（见 docs/直落表开通清单.md）
-     ★ 正式用法填 Cloudflare Worker 中转地址：里面不含任何密钥，可以公开写在源码里。
-       十几位检查人打开打分页就能直接提交，谁都不用配。
-     ★ 不要在这里填金山 webhook + 令牌：AirScript-Token 是账号级凭据，
-       写在公开源码里等于公开你名下所有金山文档；填了就变成每台手机各存一份。
-     调试可临时用手机上的「一次性设置」填 webhook，那份只落在本机 localStorage。 */
-  report: { url: '', token: '' },
+  /* 打分直落表 · 提交地址（见 docs/腾讯云函数部署步骤.md）
+     2026-11-20 接通：腾讯云函数「函数 URL」中转，地域广州。
+     健康检查返回 {"ok":true,"hasTarget":true,"hasToken":true}。
+
+     ★ 这里只放地址，token 永远留空。
+       令牌只存在函数的环境变量 KDOCS_TOKEN 里，手机端一律不带 ——
+       AirScript-Token 是账号级凭据，写在公开源码里等于公开名下所有金山文档。
+       前端靠「地址里有没有 /api/v3/ide/」自动判断直连还是走中转
+       （score.js submitOnline 里的 direct 判断）。
+
+     ★ 这个地址是公开的（Pages 就是要公开才能用）。可接受的原因：
+       函数只往固定的金山 webhook 转发，改不了目标、读不到任何文档内容；
+       而打分页本身也公开，谁有链接本来就能提交分数。 */
+  report: { url: 'https://1320695126-lp90hbm8xh.ap-guangzhou.tencentscf.com', token: '' },
 
   submitPass: 'SFYD-2027'
 };
