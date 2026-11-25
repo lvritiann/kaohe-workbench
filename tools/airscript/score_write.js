@@ -1,5 +1,5 @@
 /* ==========================================================================
- * 现场打分 · 直落表   score_write.js   v1.0
+ * 现场打分 · 直落表   score_write.js   v1.2   （2026-11-25 换版：80 项题库）
  *
  * 运行位置：金山文档「考核工作台数据源（V2.1）.xlsx」→ 效率 → 高级开发
  *           → AirScript 脚本编辑器（JS 脚本，不是 PY 脚本）
@@ -15,24 +15,24 @@
  *       inspector: "张三",
  *       submittedAt: "2026-11-18 21:30",
  *       type:      "运营检查",
- *       items:  [ {no:1, cat:"...", name:"...", std:3, res:"ok"|"no"|"na", note:"扣分原因"} ... ],  // 全 73 项
+ *       items:  [ {no:1, cat:"...", name:"...", std:2, res:"ok"|"no"|"na", note:"扣分原因"} ... ],  // 全 80 项
  *       veto:   [ "散装汽油销售管控" ],                    // 触发的一票否决项名称，没有就空数组
  *       photos: [ {no:5, name:"IMG_001.jpg", data:"<纯base64>", mime:"image/jpeg"} ... ]
  *   } } }
  *
  * 做的事：
- *   1. 照片逐张推到 GitHub 仓库 docs/photos/<站>/<月>/ 下，拿到公网直链
- *   2. 按「以最新为准」重写「检查明细」里该站该月的行（19 列）
- *   3. 照片列写 =IMAGE("<直链>")，单元格里直接出图
+ *   1. 按「以最新为准」重写「检查明细」里该站该月的行（19 列），★ 逐行赋值，
+ *      不用 `Range('A2:S'+n).Value2 = 二维数组`（真表上只认第一行，且不报错）
+ *   2. 照片走 cell 模式：Range('N'+r).InsertImage(base64)，真图片嵌在格子里
+ *   3. 零扣分站也写一行占位（序号留空），否则 record_sync 判为「未检查」白丢 28 分
  *   4. 返回 JSON 给手机页
  *
- * ★ 关于 =IMAGE()：WPS 12.1 起支持，但每个文档第一次用要人工点一次「授权」，
- *   没授权时单元格显示 #BLOCKED!。授权一次后本脚本写入的公式就能正常出图。
- *   实测：baidu / wps.cn / github.io 三个域名在未授权状态下都是 #BLOCKED!，
- *   所以这是文档级授权状态，不是域名被拦。
+ * ★ 为什么用 InsertImage 而不是 =IMAGE(直链)：
+ *   =IMAGE 需要公网直链 + 文档级授权，没授权就 #BLOCKED!；
+ *   InsertImage 直接吃 base64，不依赖网络、不需要授权，是本脚本的默认路径。
+ *   老的 'url' 模式（推 GitHub 拿直链）保留但已不用，CFG.TOKEN 已清空。
  *
  * ★ 末尾的 main(); 不能删 —— 金山是「执行整个脚本」，不调用等于空跑。
- * ★ 本文件含明文 GitHub 令牌，请勿随意外发；令牌只对 kaohe-workbench 有写权限。
  * ========================================================================== */
 
 var CFG = {
@@ -293,7 +293,7 @@ function computeScore(p) {
   var op = r2(conv / 100 * CFG.INSPECT_BASE);
   if (op > CFG.INSPECT_BASE) op = CFG.INSPECT_BASE;
   if (Math.abs(total - 100) > 0.01) {
-    say('⚠️ 73 项标准分合计 ' + total + '（应为 100），模板可能被改过');
+    say('⚠️ 传入检查项标准分合计 ' + total + '（应为 100），题库或模板可能不一致');
   }
   return { total: total, na: na, raw: r2(got), converted: conv, op: op };
 }
@@ -517,7 +517,7 @@ function main() {
 
   if (!s(p.station)) return bad('缺 station');
   if (!s(p.month)) return bad('缺 month');
-  if (!p.items || !p.items.length) return bad('缺 items（应为全 73 项）');
+  if (!p.items || !p.items.length) return bad('缺 items（应为完整检查项）');
   if (!/^\d{4}-\d{2}$/.test(s(p.month))) return bad('month 格式应为 YYYY-MM，收到：' + s(p.month));
 
   var calc = computeScore(p);
