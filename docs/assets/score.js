@@ -1,7 +1,7 @@
 /* 现场检查打分 V6
    依据《目标责任考核方案》V1.0（V6）：运营检查 100 分制 → 折算 28 分；6 项一票否决。
-   交互：登录（下拉选名字 + 个人口令）；73 项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
-   提交：点确认后直接把 73 项结果 + 扣分原因 + 佐证照片 POST 给金山文档里的 AirScript
+   交互：登录（下拉选名字 + 个人口令）；全部检查项默认满分，只在扣分点选「否」→ 原因必填、照片可选；提交前勾一次「已逐项核对」。
+   提交：点确认后直接把全部检查项结果 + 扣分原因 + 佐证照片 POST 给金山文档里的 AirScript
         webhook，由服务器端写「检查明细」并把照片落成 =IMAGE(直链)，格子里直接出图。
         网址与令牌存在各检查人本机（localStorage），不进源码；走中转时两者都不需要。
         未配置时先弹一次「一次性设置」，填完才放行 —— 不会静默落到别的路径。
@@ -144,7 +144,7 @@
     if (DATA) { render(); return; }
     $('app').innerHTML = '<div class="card" style="margin-top:16px"><div class="sect__head">' +
       '<span class="sect__title">正在载入检查项…</span></div>' +
-      '<div class="hint">73 项判定与 6 项否决，首次需联网取一次。</div></div>';
+      '<div class="hint">判定项与一票否决清单，首次需联网取一次。</div></div>';
     itemsPromise.then(function (d) {
       if (!d) {
         $('app').innerHTML = '<div class="err">检查项加载失败，请联网打开一次本页再试；已填内容存在本机草稿里，不会丢。</div>';
@@ -166,7 +166,8 @@
     var h = '';
 
     h += '<section class="card" style="margin-top:16px">';
-    h += '<div class="warn" style="margin:0 0 12px">73 项<b>默认全部符合</b>；只有发现问题才点该项「扣分」，填原因（必填）、可附照片。</div>';
+    h += '<div class="warn" style="margin:0 0 12px">' + (DATA ? DATA.items.length : 80) +
+      ' 项<b>默认全部符合</b>；只有发现问题才点该项「扣分」，填原因（必填）、可附照片。</div>';
     h += '<div class="field"><label>油站</label><select id="fStation"><option value="">请选择油站</option>';
     (C.physicalStations || C.stations).forEach(function (s) {
       h += '<option value="' + esc(s) + '"' + (s === S_.station ? ' selected' : '') + '>' + esc(s) + '</option>';
@@ -192,7 +193,8 @@
     h += '</div></section>';
 
     h += '<div class="sect__head" style="margin-top:22px"><span class="sect__title">运营检查</span>' +
-      '<span class="sect__hint">73 项 · 100 分 → ' + C.seg.inspect.base + ' 分</span></div>';
+      '<span class="sect__hint">' + DATA.items.length + ' 项 · ' + C.inspect.total + ' 分 → ' +
+      C.seg.inspect.base + ' 分</span></div>';
 
     DATA.categories.forEach(function (cat, ci) {
       var list = DATA.items.filter(function (i) { return i.cat === cat.title; });
@@ -287,7 +289,7 @@
   var PHOTO_Q = [0.82, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5];            /* 质量档，从高到低试 */
   var PHOTO_SHRINK = 0.85, PHOTO_ROUNDS = 4;                        /* 质量见底后缩边重试 */
   var PHOTO_PER_ITEM = 1;                                           /* 每项 1 张：表里 N 列一格一张 */
-  /* ★ 单张 500KB 换成「总量」也约束不住：73 项 × 3 张 × 500KB ≈ 100MB。
+  /* ★ 单张 500KB 换成「总量」也约束不住：80 项 × 3 张 × 500KB ≈ 120MB。
      不过现在不再打包，总量只用于「未配地址」时告知用户本机压了多少照片。 */
   var PHOTO_TOTAL_MAX = 30 * 1024;                               /* 历史阈值，仅文案参考 */
 
@@ -741,7 +743,7 @@
     if (veto.vetoed) b += '<div class="err">已触发一票否决：' + esc(veto.failed.join('、')) + '</div>';
     b += '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:18px;font-size:14px;line-height:1.6">' +
       '<input type="checkbox" id="chkConfirm" style="width:20px;height:20px;flex:0 0 auto">';
-    b += '<span>我已逐项核对全部 73 项与 6 项一票否决，确认以上结果真实。</span></label>';
+    b += '<span>我已逐项核对全部 ' + DATA.items.length + ' 项与 ' + DATA.veto.length + ' 项一票否决，确认以上结果真实。</span></label>';
     b += '<div class="sheet__acts"><button class="btn btn--ghost" onclick="closeSheet()">返回</button>' +
       '<button class="btn btn--primary" id="doSubmit" disabled>确认提交</button></div>';
     showSheet(b);
@@ -750,7 +752,7 @@
   }
 
   /* ---------------- 直落金山表 ----------------
-     提交不再打包下载：把 73 项结果 + 扣分原因 + 佐证照片一次性 POST 给金山文档里
+     提交不再打包下载：把全部检查项结果 + 扣分原因 + 佐证照片一次性 POST 给金山文档里
      那段 AirScript 的 webhook，由它在服务器端写「检查明细」，照片列写 =IMAGE(直链)。
      网址与令牌不入源码 —— 存在本机 localStorage，首次提交时填一次。
 
@@ -802,7 +804,7 @@
     });
   }
 
-  /* 73 项全量上传（不只是扣分项）：脚本要拿全部标准分才能算准折算分，
+  /* 全量上传（不只是扣分项）：脚本要拿全部标准分才能算准折算分，
      只传扣分项的话分母凑不出 100，运营段会算错。 */
   function buildPayload(res, veto) {
     var items = DATA.items.map(function (it) {
@@ -1246,7 +1248,7 @@
     aoa.push(['实得小计', res.raw, 'NA 项标准分', res.naScore,
       '有效项总分', res.effective, '折算得分/100', res.converted, '运营段/' + C.seg.inspect.base, res.score]);
     aoa.push(['一票否决', veto.vetoed ? '已触发：' + veto.failed.join('、') : '未触发']);
-    aoa.push(['检查人', USER.name, '确认', '已逐项核对 73 项 + 6 项否决']);
+    aoa.push(['检查人', USER.name, '确认', '已逐项核对 ' + DATA.items.length + ' 项 + ' + DATA.veto.length + ' 项否决']);
 
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [{ wch: 18 }, { wch: 5 }, { wch: 20 }, { wch: 44 }, { wch: 26 },
