@@ -53,6 +53,19 @@
     <div class="field"><label>神秘访客总分（0–100）</label><input type="text" id="mystery" inputmode="decimal" value="96.4"></div>
   </section>
 
+  <section class="card" id="extraCard" style="display:none">
+    <div class="sect__head" style="margin-bottom:10px"><span class="sect__title">投诉扣分</span>
+      <span class="sect__hint">方案第八章（一）· 填件数</span></div>
+    <div class="field"><label>一般升级投诉（件）　10 分／件</label><input type="text" id="cEsc" inputmode="decimal" value="0"></div>
+    <div class="field"><label>重复投诉（件）　20 分／件</label><input type="text" id="cRep" inputmode="decimal" value="0"></div>
+    <div class="field"><label>监管介入（件）　50 分／件</label><input type="text" id="cReg" inputmode="decimal" value="0"></div>
+    <label class="check" style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <input type="checkbox" id="cMajor" style="width:auto">
+      <span>重大投诉 → 一票否决（当期综合记 0）</span>
+    </label>
+    <div class="hint" style="margin-top:8px">站内解决不扣分；恶意投诉经核实不扣分。</div>
+  </section>
+
   <div id="manual">
     <section class="card" style="margin-top:16px">
       <div class="hint">选择油站后自动带出人效参数并出结果；也可直接手填。</div>
@@ -74,6 +87,8 @@
     <div class="kv"><span>非油段</span><b>销售5＋毛利5，各封顶6</b></div>
     <div class="kv"><span>现场管理（38）</span><b>一级考核5 ＋ 二级检查28 ＋ 神访5</b></div>
     <div class="kv"><span>一级考核 NA</span><b>5 ×（其余项得分 ÷ 95）</b></div>
+    <div class="kv"><span>投诉扣分（按件）</span><b>升级10／重复20／监管50，不设下限；重大投诉一票否决</b></div>
+    <div class="kv"><span>进步加分</span><b>年度人效每升 1% 加 0.2，上限 3，不参与月度排名</b></div>
     <div class="kv kv--total"><span>综合</span><b>四项相加 − 投诉 ＋ 进步，封顶120</b></div>
   </section>
 
@@ -137,6 +152,7 @@ function pick(name) {
     document.getElementById('out').innerHTML = '';
     document.getElementById('paramCard').style.display = 'none';
     document.getElementById('oilCard').style.display = 'none';
+    document.getElementById('extraCard').style.display = 'none';
     document.getElementById('manual').style.display = 'block';
     CUR = null; return;
   }
@@ -147,6 +163,7 @@ function pick(name) {
 
   document.getElementById('paramCard').style.display = 'block';
   document.getElementById('oilCard').style.display = 'block';
+  document.getElementById('extraCard').style.display = 'block';
   document.getElementById('manual').style.display = 'none';
   /* 默认值取当月实况：efficiency.json 存的是会计月累计吨 + 已计天数；
      缺失时回退 stations.json 的三年平均日均吨 × 会计月实际天数（28/29/30/31） */
@@ -166,6 +183,9 @@ function pick(name) {
   document.getElementById('nonSales').value = 100;
   document.getElementById('nonMargin').value = 100;
   document.getElementById('insp').value = 90;
+  /* 换站时投诉件数归零，避免上一站的数据串到下一站 */
+  ['cEsc', 'cRep', 'cReg'].forEach(function (id) { document.getElementById(id).value = '0'; });
+  document.getElementById('cMajor').checked = false;
   Status.load().then(function () {
     var st = Status.label(s.name, new Date().toISOString().slice(0, 7));
     if (st && st.code !== 'normal') {
@@ -177,12 +197,13 @@ function pick(name) {
   compute();
 }
 
-['gas', 'diesel', 'head', 'days', 'oilActual', 'oilTask', 'nonSales', 'nonMargin', 'primary', 'insp', 'mystery']
+['gas', 'diesel', 'head', 'days', 'oilActual', 'oilTask', 'nonSales', 'nonMargin', 'primary', 'insp', 'mystery', 'cEsc', 'cRep', 'cReg']
   .forEach(function (id) {
     document.addEventListener('input', function (e) {
       if (e.target && e.target.id === id && CUR) compute();
     });
   });
+document.getElementById('cMajor').addEventListener('change', function () { if (CUR) compute(); });
 
 document.getElementById('go').addEventListener('click', function () {
   var g = parseFloat(document.getElementById('g2').value) || 0;
@@ -260,16 +281,45 @@ function render(o) {
   h += '<div class="kv"><span>神秘访客（' + CFG.seg.mystery.base + '）</span><b>' + mystFinal.toFixed(2) + '</b></div>';
   var onSite = Engine.onSiteScore({ primaryScore: primFinal, inspectScore: inspScore, mysteryScore: mystFinal });
   h += '<div class="kv"><span>现场管理段（' + CFG.seg.onSite.base + '）</span><b>' + onSite.toFixed(2) + '</b></div>';
+
+  /* 投诉三档：按件数 × 档位算，不只显示一个总数 —— 站长能看出这分是怎么扣的 */
+  var cInfo = Engine.complaintOf({
+    escalate: document.getElementById('cEsc').value,
+    repeat: document.getElementById('cRep').value,
+    regulator: document.getElementById('cReg').value,
+    major: document.getElementById('cMajor').checked
+  });
+  var cTxt;
+  if (cInfo.major) {
+    cTxt = '重大投诉 → 一票否决';
+  } else if (cInfo.count > 0) {
+    var parts = [];
+    if (cInfo.escalate > 0) parts.push('升级 ' + cInfo.escalate + '×' + CFG.complaint.escalate);
+    if (cInfo.repeat > 0) parts.push('重复 ' + cInfo.repeat + '×' + CFG.complaint.repeat);
+    if (cInfo.regulator > 0) parts.push('监管 ' + cInfo.regulator + '×' + CFG.complaint.regulator);
+    cTxt = parts.join(' ＋ ') + ' ＝ −' + cInfo.deduct.toFixed(2) + '（共 ' + cInfo.count + ' 件）';
+  } else {
+    cTxt = '无投诉 · 0';
+  }
+  h += '<div class="kv"><span>投诉扣分（' + cInfo.count + ' 件）</span><b>' + cTxt + '</b></div>';
+
   var total = Engine.composite({
     oilScore: oil.score, nonoilScore: non.score, effScore: effScore,
-    primaryScore: primScore, primaryNA: primNA, inspectScore: inspScore, mysteryScore: mystScore
+    primaryScore: primScore, primaryNA: primNA, inspectScore: inspScore, mysteryScore: mystScore,
+    escalate: cInfo.escalate, repeat: cInfo.repeat, regulator: cInfo.regulator, major: cInfo.major
   });
   h += '<div class="kv kv--total"><span>合计</span><b>' + total.toFixed(2) + ' 分</b></div></section>';
+
+  if (cInfo.major) {
+    h += '<div class="err" style="margin-top:12px"><b>重大投诉 → 一票否决</b>：' +
+      '当期综合得分记 0 分、当期排名垫底、当年不得评优（方案第八章（一）、第九章）。</div>';
+  }
 
   if (oil.score >= CFG.seg.oil.cap) h += '<div class="warn">油品段已封顶 ' + CFG.seg.oil.cap + ' 分（完成率 ≥' + (CFG.scoreRule.oilCapRate * 100).toFixed(1) + '%），超额不再加分。</div>';
   if (effScore >= CFG.seg.eff.cap) h += '<div class="warn">人效段已封顶 ' + CFG.seg.eff.cap + ' 分（人效达基准 ' + CFG.hr.fullAt + ' 倍，即 ' + (CFG.hr.benchmark * CFG.hr.fullAt) + '），再高不再加分。</div>';
   h += '<p class="sect__note" style="margin-top:12px">本方案不设等级，只按合计得分出 1–15 名排名；' +
-    '同分时油品段高者排前。投诉扣分（10／20／50）与进步加分（上限 3）另行加减；触发一票否决当期记 0 分。</p>';
+    '同分时油品段高者排前。投诉扣分已按件数计入上方合计（10／20／50 分每件，不设下限）；' +
+    '进步加分（上限 3）只在年度兑现时计入年度平均得分，不参与月度排名，故此处不列。</p>';
 
   document.getElementById('out').innerHTML = h;
 }

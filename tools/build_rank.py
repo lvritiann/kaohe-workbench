@@ -23,7 +23,11 @@
       "mysteryScore100": 96,                       // 神访百分制；或直接 "mysteryScore"
       "mysteryUntested": false,                    // true 时按当月参评站均分填补
       "mysteryNA": false,                          // true 时按其余项得分率折算补齐（南沙）
-      "complaint": 0, "progress": 0, "vetoed": false
+      "complaints": {                              // 投诉件数（方案第八章一），推荐用这个
+        "escalate": 1, "repeat": 0, "regulator": 0, "major": false
+      },                                           // 10 分/件 · 20 分/件 · 50 分/件 · 重大投诉一票否决
+      "complaint": 0,                              // 旧口径：直接给总扣分。件数为 0 时才采信
+      "progress": 0, "vetoed": false
     }
   ]
 }
@@ -54,6 +58,9 @@ PRIMARY_BASE, PRIMARY_CAP = 5, 5
 INSPECT_BASE, INSPECT_CAP = 28, 28
 MYSTERY_BASE, MYSTERY_CAP = 5, 5
 TOTAL_BASE, TOTAL_CAP = 100, 120
+
+# 投诉三档（方案第八章（一））：一般升级投诉 / 重复投诉 / 监管介入
+COMP_ESC, COMP_REP, COMP_REG = 10, 20, 50
 
 # 不参与神秘访客的服务区（与 config.mysteryExempt 一致）
 MYSTERY_EXEMPT = ["南沙"]
@@ -86,6 +93,32 @@ def inspect(o):
     return min(max(0, float(o.get("inspectScore100", 100)) / 100 * INSPECT_BASE), INSPECT_CAP)
 
 
+def complaint_of(o):
+    """投诉三档 → 扣分与否决。
+
+    优先用件数 ``complaints: {escalate, repeat, regulator, major}``
+    （一般升级投诉 10 分/件、重复投诉 20 分/件、监管介入 50 分/件、重大投诉一票否决）；
+    件数全为 0 时回退旧口径 ``complaint``（直接给总扣分），保证老 rank_source.json 照常跑。
+
+    → (deduct, 是否重大投诉否决, 明细 dict)
+    """
+    c = o.get("complaints") or {}
+    e = int(c.get("escalate", 0) or 0)
+    p = int(c.get("repeat", 0) or 0)
+    g = int(c.get("regulator", 0) or 0)
+    major = bool(c.get("major"))
+    by_tier = e * COMP_ESC + p * COMP_REP + g * COMP_REG
+    legacy = float(o.get("complaint", 0) or 0)
+    has_counts = (e + p + g) > 0
+    deduct = by_tier if has_counts else (legacy if legacy > 0 else by_tier)
+    return r(deduct), major, {
+        "escalate": e, "repeat": p, "regulator": g, "major": major,
+        "count": e + p + g,
+        "byTier": r(by_tier), "legacy": r(legacy),
+        "basis": "tiers" if has_counts else ("legacy" if legacy > 0 else "tiers"),
+    }
+
+
 def demo_input(base):
     """确定性演示值：不引入随机数，便于复算与回归比对。"""
     out = []
@@ -107,6 +140,7 @@ def demo_input(base):
             "mysteryScore100": 100 - (i * 2 % 11),
             "mysteryUntested": False,
             "mysteryNA": b["name"] in MYSTERY_EXEMPT,
+            "complaints": {"escalate": 0, "repeat": 0, "regulator": 0, "major": False},
             "complaint": 0,
             "progress": 0,
             "vetoed": False
@@ -204,15 +238,16 @@ def main():
             if myst_na:
                 myst_s = r(min(MYSTERY_BASE * rate, MYSTERY_CAP))
 
-        complaint = r(float(o.get("complaint", 0) or 0))
+        complaint, comp_major, comp_detail = complaint_of(o)
         progress = r(float(o.get("progress", 0) or 0))
-        vetoed = bool(o.get("vetoed"))
+        vetoed = bool(o.get("vetoed")) or comp_major
         on_site = r(prim_s + insp_s + myst_s)
         total = 0 if vetoed else r(min(
             oil_s + non_s + eff_s + on_site - complaint + progress, TOTAL_CAP))
 
         rows.append({
             "name": name, "vetoed": vetoed, "complaint": complaint, "progress": progress,
+            "complaintDetail": comp_detail,
             "oilScore": oil_s, "nonoilScore": non_s, "effScore": eff_s,
             "primaryScore": prim_s, "primaryNA": prim_na,
             "inspectScore": insp_s, "mysteryScore": myst_s, "mysteryNA": myst_na,
@@ -251,11 +286,13 @@ def main():
 
     print("已生成 %s（%s · %d 站）" % (OUT, out["dataMode"], len(rows)))
     for x in rows:
+        note = "  否决" if x["vetoed"] else ""
+        if x["complaint"]:
+            note += "  投诉-%g" % x["complaint"]
         print("%2d %-8s 油%5.2f 非%5.2f 效%5.2f 一级%5s 检%5.2f 访%4.2f 计%6.2f%s"
               % (x["rank"], x["name"], x["oilScore"], x["nonoilScore"], x["effScore"],
                  "NA" if x["primaryNA"] else "%.2f" % x["primaryScore"],
-                 x["inspectScore"], x["mysteryScore"], x["total"],
-                 "  否决" if x["vetoed"] else ""))
+                 x["inspectScore"], x["mysteryScore"], x["total"], note))
 
 
 if __name__ == "__main__":

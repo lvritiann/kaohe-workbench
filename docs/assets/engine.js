@@ -187,10 +187,37 @@ window.Engine = (function () {
     return C.seg.oil.base + C.seg.nonoil.base + C.seg.eff.base + C.seg.onSite.base;
   }
 
-  function complaintDeduct(c) {
+  /* 投诉三档扣分 ＋ 重大投诉一票否决（方案第八章（一））
+       一般升级投诉 10 分／件 · 重复投诉 20 分／件 · 监管介入 50 分／件
+       前三档不设下限（可使综合得分为负）；重大投诉不扣分，直接一票否决。
+
+     入口既接受件数对象 {escalate, repeat, regulator, major}，
+     也接受旧口径的总扣分 {complaint: 25}（rank_source.json 老格式），
+     两者同时存在时以件数为准 —— 件数可复算，总数不可复算。 */
+  function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+  function complaintOf(src) {
     var K = C.complaint;
-    return (c.escalate || 0) * K.escalate + (c.repeat || 0) * K.repeat + (c.regulator || 0) * K.regulator;
+    src = src || {};
+    var e = num(src.escalate), p = num(src.repeat), g = num(src.regulator);
+    var major = !!src.major;
+    var byTier = e * K.escalate + p * K.repeat + g * K.regulator;
+    var legacy = num(src.complaint);
+    var hasCounts = (e + p + g) > 0;
+    var deduct = hasCounts ? byTier : (legacy > 0 ? legacy : byTier);
+    return {
+      escalate: e, repeat: p, regulator: g, major: major,
+      count: e + p + g,
+      byTier: r(byTier, 2),
+      legacy: r(legacy, 2),
+      deduct: r(deduct, 2),
+      basis: hasCounts ? 'tiers' : (legacy > 0 ? 'legacy' : 'tiers'),
+      vetoed: major
+    };
   }
+
+  /* 兼容旧调用：只给件数对象时返回扣分数 */
+  function complaintDeduct(c) { return complaintOf(c).deduct; }
 
   function progressBonus(growthRate) {
     if (!(growthRate > 0)) return 0;
@@ -202,14 +229,18 @@ window.Engine = (function () {
     return r((p.primaryScore || 0) + (p.inspectScore || 0) + (p.mysteryScore || 0), 2);
   }
 
-  /* 综合 = 油品 + 非油 + 人效 + 现场管理段 − 投诉 + 进步；封顶 120（投诉不设下限）
-     触发一票否决 → 当期记 0 分（与 build_rank.py / 方案第九章一致） */
+  /* 综合 = 油品 + 非油 + 人效 + 现场管理段 − 投诉扣分 + 进步加分；封顶 120（投诉不设下限）
+     ★ 投诉以件数计（complaintOf），重大投诉或显式 vetoed → 当期记 0 分
+        （与 build_rank.py / 方案第八章（一）、第九章一致） */
   function composite(p) {
-    if (p && p.vetoed) return 0;
+    p = p || {};
+    if (p.vetoed) return 0;
+    var c = complaintOf(p);
+    if (c.vetoed) return 0;
     var na = fillOnSiteNA(p);
     var sum = (p.oilScore || 0) + (p.nonoilScore || 0) + (p.effScore || 0)
       + (p.inspectScore || 0) + na.primaryScore + na.mysteryScore
-      - (p.complaint || 0) + (p.progress || 0);
+      - c.deduct + (p.progress || 0);
     return r(Math.min(sum, C.totalCap || 120), 2);
   }
 
@@ -248,6 +279,7 @@ window.Engine = (function () {
     accountDays: accountDays, currentMonth: currentMonth,
     primarySegment: primarySegment, inspectResult: inspectResult, vetoResult: vetoResult,
     mysterySegment: mysterySegment, complaintDeduct: complaintDeduct,
+    complaintOf: complaintOf,
     progressBonus: progressBonus, onSiteScore: onSiteScore, composite: composite,
     fillOnSiteNA: fillOnSiteNA, totalBase: totalBase,
     rank: rank, serviceAverage: serviceAverage, combineSides: combineSides,
